@@ -1,0 +1,41 @@
+#!/bin/sh
+
+# Mount virtual filesystems
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t devtmpfs none /dev
+
+sleep 2
+
+# Search devices for boot ISO
+for dev in /dev/sda /dev/sdb /dev/sr0; do
+    if [ -b "$dev" ]; then
+        echo "Found boot ISO on $dev. Mounting..."
+        mount -t iso9660 -o loop,ro "$dev" /iso && break
+    fi
+done
+
+# Fail if nothing mounted
+if ! mountpoint -q /iso; then
+    echo "ERROR: Could not mount boot ISO. Dropping to a shell..."
+    exec sh
+fi
+
+# Mount the squashfs live image
+mount -t squashfs -o ro /iso/LiveOS/ps3_install.img /sysroot
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Failed to mount live image. Dropping to a shell.."
+    exec sh
+fi
+
+echo "Live image mounted. Switching roots..."
+
+# Move mounts required by systemd
+mount --move /proc /sysroot/proc
+mount --move /sys  /sysroot/sys
+mount --move /dev  /sysroot/dev
+
+# Switch to real root
+exec switch_root /sysroot /sbin/init
+
