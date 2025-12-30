@@ -9,7 +9,7 @@ If you are interested in developing for PS3LINUX but do not have a dedicated Lin
 1. a Fedora operating system - my scripts are heavily dependent on the dnf package manager
 2. qemu - for running programs executed within a ppc64 chroot `sudo dnf install qemu`
 3. enable systemd's proc-sys-fs-binfmt_misc.mount unit: `sudo systemctl enable proc-sys-fs-binfmt_misc.mount`
-4. optional - add your user to the kvm group: `sudo chmod -aG kvm <USERNAME>`
+4. optional - add your user to the kvm group: `sudo usermod -aG kvm <USERNAME>`
 
 ### How to use
 
