@@ -25,7 +25,7 @@ echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf --forcearch=x86_64 --releasever=28 clean all
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf --forcearch=x86_64 --releasever=28 makecache
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --forcearch=x86_64 --releasever=28 groupinstall core
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --forcearch=x86_64 install ncurses ncurses-devel binutils make gcc gcc-c++ gcc-plugin-devel bc flex bison wget tar tree rsync patch openssl-* zlib-* perl binutils-powerpc64-linux-gnu gcc-powerpc64-linux-gnu
+chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --forcearch=x86_64 install ncurses ncurses-devel binutils make gcc gcc-c++ gcc-plugin-devel bc flex bison wget tar tree rsync patch openssl-* zlib-* binutils-powerpc64-linux-gnu gcc-powerpc64-linux-gnu
 chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.0.19.tar.xz
 chroot $KERNEL_BUILD_PATH /usr/bin/tar xf linux-6.0.19.tar.xz
 cp -r $(pwd)/resources/patches-6.0.19 $KERNEL_BUILD_PATH/
