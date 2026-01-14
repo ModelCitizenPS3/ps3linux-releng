@@ -10,6 +10,8 @@ KERNEL_BUILD_PATH=$(pwd)/resources/FC28-x86_64
 mkdir $KERNEL_BUILD_PATH
 dnf -y --use-host-config --forcearch=x86_64 --releasever=28 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install filesystem
 rm -fv $KERNEL_BUILD_PATH/dev/null
+mknod -m 600 $KERNEL_BUILD_PATH/dev/console c 5 1
+mknod -m 666 $KERNEL_BUILD_PATH/dev/null c 1 3
 touch $KERNEL_BUILD_PATH/etc/fstab
 mount -t proc /proc $KERNEL_BUILD_PATH/proc
 mount -t sysfs /sys $KERNEL_BUILD_PATH/sys
@@ -59,6 +61,8 @@ mkdir $CHROOT_PATH
 dnf -y --use-host-config --forcearch=ppc64 --releasever=28 --disable-repo=* --enable-repo=fedora --repofrompath=ps3linux,http://www.ps3linux.net/ps3linux-repos/ps3linux/ppc64/ --no-gpgchecks --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=fedora-release --installroot=$CHROOT_PATH install filesystem
 
 rm -fv $CHROOT_PATH/dev/null
+mknod -m 600 $CHROOT_PATH/dev/console c 5 1
+mknod -m 666 $CHROOT_PATH/dev/null c 1 3
 touch $CHROOT_PATH/etc/fstab
 
 mount -t proc /proc $CHROOT_PATH/proc
