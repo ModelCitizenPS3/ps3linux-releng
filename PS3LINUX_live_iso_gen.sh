@@ -11,6 +11,7 @@ LIVE_ISO_PATH=$(pwd)/PS3LINUX_LIVE_ISO
 mkdir -p $LIVE_ISO_PATH/{boot,etc,LiveOS}
 mksquashfs $CHROOT_PATH $LIVE_ISO_PATH/LiveOS/ps3_install.img -comp xz -b 1M -Xdict-size 100% -noappend
 [ -d $(pwd)/resources/initramfs/lib/modules/6.0.19 ] && rm -rf $(pwd)/resources/initramfs/lib/modules/6.0.19
+mkdir -p $(pwd)/resources/initramfs/lib/modules
 cp -r $(pwd)/resources/6.0.19 $(pwd)/resources/initramfs/lib/modules/
 pushd $(pwd)/resources/initramfs
 ./rd_gen.sh
