@@ -1,0 +1,14 @@
+[Unit]
+Description=ZRAM Swap Setup
+DefaultDependencies=no
+After=zram-setup@.service
+Before=swap.target
+ConditionPathExists=/sys/block/zram0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/zram-swap.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=swap.target

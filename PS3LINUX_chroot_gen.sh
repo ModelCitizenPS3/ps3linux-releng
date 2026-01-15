@@ -1,14 +1,25 @@
-#!/bin/sh
+#!/bin/bash
 
-set -euo pipefail
+set -eo pipefail
 
-[ $(id -u) -eq 0 ] || exit 1
+# Check if root
+if (( EUID != 0 )); then
+    echo "Error: This script must be run as root." >&2
+    exit 1
+fi
 
-CHROOT_PATH=$(pwd)/PS3LINUX_chroot
-KERNEL_BUILD_PATH=$(pwd)/resources/FC28-x86_64
+CHROOT_PATH="$(pwd)/PS3LINUX_chroot"
+KERNEL_BUILD_PATH="$(pwd)/FC28-x86_64_chroot"
 
-mkdir $KERNEL_BUILD_PATH
-dnf -y --use-host-config --forcearch=x86_64 --releasever=28 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install filesystem
+# Build a temporary Fedora 28 (x86_64) chroot where we can cross-compile our kernel
+if [ -d "$KERNEL_BUILD_PATH" ]; then
+    echo "Error: Directory $KERNEL_BUILD_PATH exists." >&2
+    exit 1
+else
+    mkdir -p "$KERNEL_BUILD_PATH"
+fi
+
+dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install filesystem
 rm -f $KERNEL_BUILD_PATH/dev/null
 mknod -m 600 $KERNEL_BUILD_PATH/dev/console c 5 1
 mknod -m 666 $KERNEL_BUILD_PATH/dev/null c 1 3
@@ -19,40 +30,39 @@ mount -o bind /dev $KERNEL_BUILD_PATH/dev
 mount -o bind /dev/pts $KERNEL_BUILD_PATH/dev/pts
 mount -t tmpfs tmpfs $KERNEL_BUILD_PATH/run
 mount -t tmpfs tmpfs $KERNEL_BUILD_PATH/tmp
-dnf -y --use-host-config --forcearch=x86_64 --releasever=28 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install dnf
+dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install dnf
 sed -i 's/enabled=1/enabled=0/g' $KERNEL_BUILD_PATH/etc/yum.repos.d/fedora-updates.repo
 echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf --forcearch=x86_64 --releasever=28 clean all
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf --forcearch=x86_64 --releasever=28 makecache
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --forcearch=x86_64 --releasever=28 groupinstall core
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --forcearch=x86_64 install perl ncurses ncurses-devel binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel binutils-powerpc64-linux-gnu gcc-powerpc64-linux-gnu
+chroot $KERNEL_BUILD_PATH /usr/bin/dnf --releasever=28 --forcearch=x86_64 clean all
+chroot $KERNEL_BUILD_PATH /usr/bin/dnf --releasever=28 --forcearch=x86_64 makecache
+chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 groupinstall core
+chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 install perl ncurses ncurses-devel binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel binutils-powerpc64-linux-gnu gcc-powerpc64-linux-gnu
 chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.8.12.tar.xz
 chroot $KERNEL_BUILD_PATH /usr/bin/tar xf linux-6.8.12.tar.xz
-cp $(pwd)/resources/0011-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
-cp $(pwd)/resources/config-6.8.12-live $KERNEL_BUILD_PATH/linux-6.8.12/.config
+cp -f $(pwd)/resources/0011-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
+cp -f $(pwd)/resources/config-6.8.12-live $KERNEL_BUILD_PATH/linux-6.8.12/.config
 chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.8.12 -p1 -i /0011-ps3stor-multiple-regions.patch
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 oldconfig
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 olddefconfig
 chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 -j1 zImage
 chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 -j1 modules
 chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 modules_install
-[ -f $(pwd)/resources/vmlinuz ] && rm $(pwd)/resources/vmlinuz
-cp $KERNEL_BUILD_PATH/linux-6.8.12/arch/powerpc/boot/zImage $(pwd)/resources/vmlinuz
-[ -d $(pwd)/resources/6.8.12 ] && rm -rf $(pwd)/resources/6.8.12
 rm -f $KERNEL_BUILD_PATH/lib/modules/6.8.12/build
 rm -f $KERNEL_BUILD_PATH/lib/modules/6.8.12/source
-cp -r $KERNEL_BUILD_PATH/lib/modules/6.8.12 $(pwd)/resources/
 umount $KERNEL_BUILD_PATH/tmp
 umount $KERNEL_BUILD_PATH/run
 umount $KERNEL_BUILD_PATH/dev/pts
 umount $KERNEL_BUILD_PATH/dev
 umount $KERNEL_BUILD_PATH/sys
 umount $KERNEL_BUILD_PATH/proc
-rm -rf $KERNEL_BUILD_PATH
 
-[ -d $CHROOT_PATH ] && rm -rf $CHROOT_PATH
-mkdir $CHROOT_PATH
+if [ -d "$CHROOT_PATH" ]; then
+    echo "Error: Directory $CHROOT_PATH exists." >&2
+    exit 1
+else
+    mkdir -pv "$CHROOT_PATH"
+fi
 
-dnf -y --use-host-config --forcearch=ppc64 --releasever=28 --disable-repo=* --enable-repo=fedora --repofrompath=ps3linux,http://www.ps3linux.net/ps3linux-repos/ps3linux/ppc64/ --no-gpgchecks --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=fedora-release --installroot=$CHROOT_PATH install filesystem
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --repofrompath=ps3linux,http://www.ps3linux.net/ps3linux-repos/ps3linux/ppc64/ --no-gpgchecks --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=fedora-release --installroot=$CHROOT_PATH install filesystem
 
 rm -f $CHROOT_PATH/dev/null
 mknod -m 600 $CHROOT_PATH/dev/console c 5 1
@@ -66,56 +76,26 @@ mount -o bind /dev/pts $CHROOT_PATH/dev/pts
 mount -t tmpfs tmpfs $CHROOT_PATH/run
 mount -t tmpfs tmpfs $CHROOT_PATH/tmp
 
-dnf -y --use-host-config --forcearch=ppc64 --releasever=28 --disable-repo=* --enable-repo=fedora --repofrompath=ps3linux,http://www.ps3linux.net/ps3linux-repos/ps3linux/ppc64/ --no-gpgchecks --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH install dnf
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --repofrompath=ps3linux,http://www.ps3linux.net/ps3linux-repos/ps3linux/ppc64/ --no-gpgchecks --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=fedora-release --installroot=$CHROOT_PATH install dnf
 
 sed -i 's/enabled=1/enabled=0/g' $CHROOT_PATH/etc/yum.repos.d/fedora-updates.repo
-cat > $CHROOT_PATH/etc/yum.repos.d/ps3linux.repo << EOF
-[ps3linux]
-name=ps3linux - ppc64
-baseurl=http://www.ps3linux.net/ps3linux-repos/ps3linux/ppc64/
-enabled=1
-gpgcheck=0
-
-[ps3linux-debuginfo]
-name=ps3linux - ppc64 - Debug
-baseurl=http://www.ps3linux.net/ps3linux-repos/ps3linux/debug/
-enabled=0
-gpgcheck=0
-
-[ps3linux-source]
-name=ps3linux - Source
-baseurl=http://www.ps3linux.net/ps3linux-repos/ps3linux/SRPMS/
-enabled=0
-gpgcheck=0
-EOF
-sed -i 's/ppc64/$basearch/g' $CHROOT_PATH/etc/yum.repos.d/ps3linux.repo
-
+cp -fv $(pwd)/resources/ps3linux.repo $CHROOT_PATH/etc/yum.repos.d/ps3linux.repo
 echo "ps3linux" > $CHROOT_PATH/etc/hostname
 echo "nameserver 8.8.8.8" > $CHROOT_PATH/etc/resolv.conf
-echo "nameserver 8.8.4.4" >> $CHROOT_PATH/etc/resolv.conf
 
-chroot $CHROOT_PATH /usr/bin/dnf --releasever=28 clean all
-chroot $CHROOT_PATH /usr/bin/dnf --releasever=28 makecache
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --setopt=install_weak_deps=False --setopt=tsflags=nodocs groupinstall core
-chroot $CHROOT_PATH /usr/bin/dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install udisks2-zram nfs-utils bash-completion wget wpa_supplicant e2fsprogs dosfstools
+chroot $CHROOT_PATH /usr/bin/dnf --releasever=28 --forcearch=ppc64 clean all
+chroot $CHROOT_PATH /usr/bin/dnf --releasever=28 --forcearch=ppc64 makecache
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs groupinstall core
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs install udisks2-zram nfs-utils bash-completion wget wpa_supplicant dosfstools NetworkManager-wifi NetworkManager-tui
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 
 rm -f $CHROOT_PATH/etc/yum.repos.d/*.rpmnew
 mv -f $CHROOT_PATH/etc/nsswitch.conf $CHROOT_PATH/etc/nsswitch.conf.orig
 mv -f $CHROOT_PATH/etc/nsswitch.conf.rpmnew $CHROOT_PATH/etc/nsswitch.conf
-
 rm -rf $CHROOT_PATH/usr/share/doc
 rm -rf $CHROOT_PATH/usr/share/man
 rm -rf $CHROOT_PATH/lib/firmware/*
-cp -rf $(pwd)/resources/6.8.12 $CHROOT_PATH/lib/modules/
-
-cat > $CHROOT_PATH/etc/systemd/network/10-eth0.network << EOF
-[Match]
-Name=eth0
-
-[Network]
-DHCP=yes
-EOF
+cp -rf $KERNEL_BUILD_PATH/lib/modules/6.8.12 $CHROOT_PATH/lib/modules/
 
 echo "ps3vram" > $CHROOT_PATH/etc/modules-load.d/ps3vram.conf
 echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="/sbin/swapon -p 200 /dev/ps3vram"' > $CHROOT_PATH/etc/udev/rules.d/10-ps3vram.rules
@@ -124,50 +104,14 @@ sed -i '1c\root:$6$cv5wSgU5Qr51VAfB$shVUHbZViYACoKJYSou.rYODvFYemeBErPqWMaEu566Q
 chmod 0000 $CHROOT_PATH/etc/shadow
 mkdir $CHROOT_PATH/mnt/target
 cp $(pwd)/resources/zram-swap.sh $CHROOT_PATH/usr/sbin/zram-swap.sh
-
-cat > $CHROOT_PATH/etc/systemd/system/zram-swap.service << EOF
-[Unit]
-Description=ZRAM Swap Setup
-DefaultDependencies=no
-After=zram-setup@.service
-Before=swap.target
-ConditionPathExists=/sys/block/zram0
-
-[Service]
-Type=oneshot
-ExecStart=/usr/sbin/zram-swap.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=swap.target
-EOF
-
+cp $(pwd)/resources/zram-swap.service $CHROOT_PATH/etc/systemd/system/zram-swap.service
 cp $(pwd)/resources/ps3linux-install.sh $CHROOT_PATH/usr/sbin/ps3linux-install.sh
 
-chroot $CHROOT_PATH /usr/bin/systemctl mask auth-rpcgss-module.service
-chroot $CHROOT_PATH /usr/bin/systemctl mask rpc-gssd.service
-chroot $CHROOT_PATH /usr/bin/systemctl mask systemd-tmpfiles-setup.service
-chroot $CHROOT_PATH /usr/bin/systemctl mask systemd-update-utmp.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable auditd.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-import-state.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-readonly.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable mdmonitor.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable multipathd.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable sssd-secrets.socket
-chroot $CHROOT_PATH /usr/bin/systemctl disable sssd.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable firewalld.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable dbus-org.fedoraproject.FirewallD1.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable NetworkManager.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable dbus-org.freedesktop.nm-dispatcher.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable dbus-org.freedesktop.NetworkManager.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable NetworkManager-wait-online.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable dnf-makecache.timer
-chroot $CHROOT_PATH /usr/bin/systemctl enable systemd-networkd.service
 chroot $CHROOT_PATH /usr/bin/systemctl enable zram-swap.service
-
-chroot $CHROOT_PATH /usr/bin/ssh-keygen -t rsa -N '' -f /etc/ssh/ssh_host_rsa_key
-chroot $CHROOT_PATH /usr/bin/ssh-keygen -t ecdsa -N '' -f /etc/ssh/ssh_host_ecdsa_key
-chroot $CHROOT_PATH /usr/bin/ssh-keygen -t ed25519 -N '' -f /etc/ssh/ssh_host_ed25519_key
 
 umount $CHROOT_PATH/tmp
 umount $CHROOT_PATH/run
@@ -181,4 +125,6 @@ find $CHROOT_PATH/usr/lib64 -name '*.a' -delete
 
 echo "Done."
 echo "Password for root: HACKTHEPLANET"
+
+exit 0
 

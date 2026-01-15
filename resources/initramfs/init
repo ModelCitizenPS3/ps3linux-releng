@@ -11,31 +11,21 @@ sleep 2
 for dev in /dev/sda /dev/sdb /dev/sr0; do
     if [ -b "$dev" ]; then
         echo "Found boot ISO on $dev. Mounting..."
-        mount -t iso9660 -o loop,ro "$dev" /iso && break
+        mount -t iso9660 -o loop,ro "$dev" /mnt/iso && break
     fi
 done
 
-# Fail if nothing mounted
-if ! mountpoint -q /iso; then
-    echo "ERROR: Could not mount boot ISO. Dropping to a shell..."
-    exec sh
-fi
-
-# Mount the squashfs live image
-mount -t squashfs -o ro /iso/LiveOS/ps3_install.img /sysroot
-
-if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to mount live image. Dropping to a shell.."
-    exec sh
-fi
-
-echo "Live image mounted. Switching roots..."
+# Mount the squashfs live image and the overlay filesystem
+mount -t squashfs -o ro /mnt/iso/LiveOS/liveroot.img /mnt/lower
+mount -t tmpfs tmpfs /mnt/upper
+mkdir -p /mnt/upper/upper /mnt/upper/work
+mount -t overlay overlay -o lowerdir=/mnt/lower,upperdir=/mnt/upper/upper,workdir=/mnt/upper/work /mnt/sysroot
 
 # Move mounts required by systemd
-mount --move /proc /sysroot/proc
-mount --move /sys  /sysroot/sys
-mount --move /dev  /sysroot/dev
+mount --move /proc /mnt/sysroot/proc
+mount --move /sys  /mnt/sysroot/sys
+mount --move /dev  /mnt/sysroot/dev
 
 # Switch to real root
-exec switch_root /sysroot /sbin/init
+exec switch_root /mnt/sysroot /sbin/init
 
