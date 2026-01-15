@@ -9,7 +9,7 @@ KERNEL_BUILD_PATH=$(pwd)/resources/FC28-x86_64
 
 mkdir $KERNEL_BUILD_PATH
 dnf -y --use-host-config --forcearch=x86_64 --releasever=28 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install filesystem
-rm -fv $KERNEL_BUILD_PATH/dev/null
+rm -f $KERNEL_BUILD_PATH/dev/null
 mknod -m 600 $KERNEL_BUILD_PATH/dev/console c 5 1
 mknod -m 666 $KERNEL_BUILD_PATH/dev/null c 1 3
 touch $KERNEL_BUILD_PATH/etc/fstab
@@ -25,28 +25,22 @@ echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf --forcearch=x86_64 --releasever=28 clean all
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf --forcearch=x86_64 --releasever=28 makecache
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --forcearch=x86_64 --releasever=28 groupinstall core
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --forcearch=x86_64 install ncurses ncurses-devel binutils make gcc gcc-c++ gcc-plugin-devel bc flex bison wget tar tree rsync patch openssl-* zlib-* binutils-powerpc64-linux-gnu gcc-powerpc64-linux-gnu
-chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.0.19.tar.xz
-chroot $KERNEL_BUILD_PATH /usr/bin/tar xf linux-6.0.19.tar.xz
-cp -r $(pwd)/resources/patches-6.0.19 $KERNEL_BUILD_PATH/
-cp $(pwd)/resources/config-6.0.19-live $KERNEL_BUILD_PATH/linux-6.0.19/.config
-chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.0.19 -p1 -i /patches-6.0.19/0009-ps3disk-blk_mq_queue_stopped.patch
-chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.0.19 -p1 -i /patches-6.0.19/0010-ps3stor-multiple-regions.patch
-chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.0.19 -p1 -i /patches-6.0.19/0011-ps3stor-send-cmd-timeout.patch
-chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.0.19 -p1 -i /patches-6.0.19/0035-ps3-partition.patch
-chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.0.19 -p1 -i /patches-6.0.19/0080-ps3rom-vendor-specific-command.patch
-chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.0.19 -p1 -i /patches-6.0.19/1000-ps3disk-fix-bvec-memcpy.patch
-chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.0.19 -p1 -i /patches-6.0.19/1010-ppc-asm-uaccess-address.patch
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.0.19 oldconfig
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.0.19 -j2 zImage
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.0.19 -j1 modules
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.0.19 modules_install
+chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --forcearch=x86_64 install perl ncurses ncurses-devel binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel binutils-powerpc64-linux-gnu gcc-powerpc64-linux-gnu
+chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.8.12.tar.xz
+chroot $KERNEL_BUILD_PATH /usr/bin/tar xf linux-6.8.12.tar.xz
+cp $(pwd)/resources/0011-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
+cp $(pwd)/resources/config-6.8.12-live $KERNEL_BUILD_PATH/linux-6.8.12/.config
+chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.8.12 -p1 -i /0011-ps3stor-multiple-regions.patch
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 oldconfig
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 -j1 zImage
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 -j1 modules
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 modules_install
 [ -f $(pwd)/resources/vmlinuz ] && rm $(pwd)/resources/vmlinuz
-cp $KERNEL_BUILD_PATH/linux-6.0.19/arch/powerpc/boot/zImage $(pwd)/resources/vmlinuz
-[ -d $(pwd)/resources/6.0.19 ] && rm -rf $(pwd)/resources/6.0.19
-rm -f $KERNEL_BUILD_PATH/lib/modules/6.0.19/build
-rm -f $KERNEL_BUILD_PATH/lib/modules/6.0.19/source
-cp -r $KERNEL_BUILD_PATH/lib/modules/6.0.19 $(pwd)/resources/
+cp $KERNEL_BUILD_PATH/linux-6.8.12/arch/powerpc/boot/zImage $(pwd)/resources/vmlinuz
+[ -d $(pwd)/resources/6.8.12 ] && rm -rf $(pwd)/resources/6.8.12
+rm -f $KERNEL_BUILD_PATH/lib/modules/6.8.12/build
+rm -f $KERNEL_BUILD_PATH/lib/modules/6.8.12/source
+cp -r $KERNEL_BUILD_PATH/lib/modules/6.8.12 $(pwd)/resources/
 umount $KERNEL_BUILD_PATH/tmp
 umount $KERNEL_BUILD_PATH/run
 umount $KERNEL_BUILD_PATH/dev/pts
@@ -60,7 +54,7 @@ mkdir $CHROOT_PATH
 
 dnf -y --use-host-config --forcearch=ppc64 --releasever=28 --disable-repo=* --enable-repo=fedora --repofrompath=ps3linux,http://www.ps3linux.net/ps3linux-repos/ps3linux/ppc64/ --no-gpgchecks --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=fedora-release --installroot=$CHROOT_PATH install filesystem
 
-rm -fv $CHROOT_PATH/dev/null
+rm -f $CHROOT_PATH/dev/null
 mknod -m 600 $CHROOT_PATH/dev/console c 5 1
 mknod -m 666 $CHROOT_PATH/dev/null c 1 3
 touch $CHROOT_PATH/etc/fstab
@@ -103,7 +97,7 @@ echo "nameserver 8.8.4.4" >> $CHROOT_PATH/etc/resolv.conf
 chroot $CHROOT_PATH /usr/bin/dnf --releasever=28 clean all
 chroot $CHROOT_PATH /usr/bin/dnf --releasever=28 makecache
 chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --setopt=install_weak_deps=False --setopt=tsflags=nodocs groupinstall core
-chroot $CHROOT_PATH /usr/bin/dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install udisks2-zram nfs-utils bash-completion wget gdisk
+chroot $CHROOT_PATH /usr/bin/dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install udisks2-zram nfs-utils bash-completion wget wpa_supplicant e2fsprogs dosfstools
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 
 rm -f $CHROOT_PATH/etc/yum.repos.d/*.rpmnew
@@ -113,7 +107,7 @@ mv -f $CHROOT_PATH/etc/nsswitch.conf.rpmnew $CHROOT_PATH/etc/nsswitch.conf
 rm -rf $CHROOT_PATH/usr/share/doc
 rm -rf $CHROOT_PATH/usr/share/man
 rm -rf $CHROOT_PATH/lib/firmware/*
-cp -rf $(pwd)/resources/6.0.19 $CHROOT_PATH/lib/modules/
+cp -rf $(pwd)/resources/6.8.12 $CHROOT_PATH/lib/modules/
 
 cat > $CHROOT_PATH/etc/systemd/network/10-eth0.network << EOF
 [Match]
