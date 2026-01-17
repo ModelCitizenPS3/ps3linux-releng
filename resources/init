@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/usr/sbin/busybox sh
+
+PATH=/usr/bin:/usr/sbin:/bin:/sbin
 
 # Mount virtual filesystems
 mount -t proc none /proc

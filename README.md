@@ -18,16 +18,18 @@ NOTE - All the scripts in the toplevel directory are meant to be run as root and
 
 1. clone this repo: `git clone https://github.com/ModelCitizenPS3/ps3linux-releng.git`
 2. enter repo directory: `cd ps3linux-releng`
-3. run first script: `sudo ./PS3LINUX_chroot_gen.sh`
-4. run second script: 'sudo ./PS3LINUX_live_iso_gen.sh
+3. run script: `sudo ./PS3LINUX_live_iso_gen.sh`
 5. you should now have the file `PS3LINUX_LIVE_ISO.iso`
-6. burn the image to a USB or CD/DVD: `dd if=PS3LINUX_LIVE_ISO.iso of=<USB DEVICE>`. Example USB device: `/dev/sda`.
-7. BE CAREFUL WITH THE DD COMMAND. Double check that you set the right output device...
-8. insert USB in your PS3 and boot your Live Linux session (from petitboot) - root password is HACKTHEPLANET
-9. run the PS3LINUX OS installer script: `ps3linux-install.sh`
+6. burn the image to a USB or CD/DVD: `sudo dd if=PS3LINUX_LIVE_ISO.iso of=<USB DEVICE>` - example USB device: `/dev/sda`
+7. BE CAREFUL WITH THE DD COMMAND. Double check that you set `of` (output file) correctly!
+8. insert USB in your PS3 and boot `PS3LIVE` from your petitboot bootloader menu
+9. login as root - password is `HACKTHEPLANET`
+10. do system maintenance/recovery tasks or install an OS like Gentoo or Adelie if you'd like
 
-I realize my scripts are pretty basic and my bash is atrocious. I do fully intend to clean them up a bit, add comments, and add some logic to make them more dynamic & capable.
+Experimental: Try out my PS3LINUX install script by running `ps3linux-install.sh` as root.
 
-TODO: finish writing my `ps3linux-install.sh` script
+TODO: finish `ps3linux-install.sh` script
+
+I realize my "scripts" are ugly and my bash is pretty basic. I do intend to clean them up a bit, add comments, and add some logic to make them more dynamic and robust.
 
 ## THE MODEL CITIZEN
