@@ -12,6 +12,7 @@ CHROOT_PATH="$(pwd)/PS3LINUX_chroot"
 KERNEL_BUILD_PATH="$(pwd)/FC28-x86_64_chroot"
 LIVE_ISO_PATH="$(pwd)/PS3LINUX_LIVE_ISO"
 INITRAMFS_PATH="$(pwd)/initramfs"
+RESOURCES_PATH="$(pwd)/resources"
 
 # Build a temporary Fedora 28 (x86_64) chroot where we can cross-compile our kernel
 if [ -d "$KERNEL_BUILD_PATH" ]; then
@@ -41,8 +42,8 @@ chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 gro
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 install perl ncurses ncurses-devel binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel binutils-powerpc64-linux-gnu gcc-powerpc64-linux-gnu
 chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.8.12.tar.xz
 chroot $KERNEL_BUILD_PATH /usr/bin/tar xf linux-6.8.12.tar.xz
-cp -f $(pwd)/resources/0011-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
-cp -f $(pwd)/resources/config-6.8.12-live $KERNEL_BUILD_PATH/linux-6.8.12/.config
+cp -f $RESOURCES_PATH/0011-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
+cp -f $RESOURCES_PATH/config-6.8.12-live $KERNEL_BUILD_PATH/linux-6.8.12/.config
 chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.8.12 -p1 -i /0011-ps3stor-multiple-regions.patch
 chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 olddefconfig
 chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 -j1 zImage
@@ -61,7 +62,7 @@ if [ -d "$CHROOT_PATH" ]; then
     echo "Error: Directory $CHROOT_PATH exists." >&2
     exit 1
 else
-    mkdir -pv "$CHROOT_PATH"
+    mkdir -p "$CHROOT_PATH"
 fi
 
 dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --repofrompath=ps3linux,http://www.ps3linux.net/ps3linux-repos/ps3linux/ppc64/ --no-gpgchecks --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=fedora-release --installroot=$CHROOT_PATH install filesystem
@@ -81,7 +82,7 @@ mount -t tmpfs tmpfs $CHROOT_PATH/tmp
 dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --repofrompath=ps3linux,http://www.ps3linux.net/ps3linux-repos/ps3linux/ppc64/ --no-gpgchecks --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=fedora-release --installroot=$CHROOT_PATH install dnf
 
 sed -i 's/enabled=1/enabled=0/g' $CHROOT_PATH/etc/yum.repos.d/fedora-updates.repo
-cp -fv $(pwd)/resources/ps3linux.repo $CHROOT_PATH/etc/yum.repos.d/ps3linux.repo
+cp -f $RESOURCES_PATH/ps3linux.repo $CHROOT_PATH/etc/yum.repos.d/ps3linux.repo
 echo "ps3linux" > $CHROOT_PATH/etc/hostname
 echo "nameserver 8.8.8.8" > $CHROOT_PATH/etc/resolv.conf
 
@@ -102,16 +103,37 @@ echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="
 chmod 0200 $CHROOT_PATH/etc/shadow
 sed -i '1c\root:$6$cv5wSgU5Qr51VAfB$shVUHbZViYACoKJYSou.rYODvFYemeBErPqWMaEu566QeywZcy/y7Qa0/ZAiz1y/vnTSPuphTCkqlypglOpJX/:20447:0:99999:7:::' $CHROOT_PATH/etc/shadow
 chmod 0000 $CHROOT_PATH/etc/shadow
+echo "vm.swappiness = 10" >> $CHROOT_PATH/etc/sysctl.conf
+echo "vm.stat_interval = 120" >> $CHROOT_PATH/etc/sysctl.conf
+cat > $CHROOT_PATH/etc/systemd/network/10-eth0.network << EOF
+[Match]
+Name=eth0
+
+[Network]
+DHCP=yes
+EOF
 mkdir $CHROOT_PATH/mnt/target
-cp $(pwd)/resources/zram-swap.sh $CHROOT_PATH/usr/sbin/zram-swap.sh
-cp $(pwd)/resources/zram-swap.service $CHROOT_PATH/etc/systemd/system/zram-swap.service
-cp $(pwd)/resources/ps3linux-install.sh $CHROOT_PATH/usr/sbin/ps3linux-install.sh
+cp $RESOURCES_PATH/zram-swap.sh $CHROOT_PATH/usr/sbin/zram-swap.sh
+cp $RESOURCES_PATH/zram-swap.service $CHROOT_PATH/etc/systemd/system/zram-swap.service
+cp $RESOURCES_PATH/ps3linux-install.sh $CHROOT_PATH/usr/sbin/ps3linux-install.sh
+cp $RESOURCES_PATH/ps3linux.repo $CHROOT_PATH/root/ps3linux.repo
 
 chroot $CHROOT_PATH /usr/bin/systemctl disable auditd.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable firewalld.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable mdmonitor.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable multipathd.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable dbus-org.fedoraproject.FirewallD1.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable firewalld.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-import-state.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-readonly.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable sssd-secrets.socket
+chroot $CHROOT_PATH /usr/bin/systemctl disable sssd.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable dbus-org.freedesktop.nm-dispatcher.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable dbus-org.freedesktop.NetworkManager.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable NetworkManager-wait-online.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable NetworkManager.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable dnf-makecache.timer
+chroot $CHROOT_PATH /usr/bin/systemctl enable systemd-networkd.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable systemd-networkd.socket
 chroot $CHROOT_PATH /usr/bin/systemctl enable zram-swap.service
 
 umount $CHROOT_PATH/tmp
@@ -150,16 +172,16 @@ mknod -m 666 $INITRAMFS_PATH/dev/null c 1 3
 cp -rf $KERNEL_BUILD_PATH/lib/modules/6.8.12 $INITRAMFS_PATH/lib/modules/
 cp -f $CHROOT_PATH/usr/sbin/busybox $INITRAMFS_PATH/usr/sbin/busybox
 chroot $INITRAMFS_PATH /usr/sbin/busybox --install -s
-cp -f $(pwd)/resources/init $INITRAMFS_PATH/init
+cp -f $RESOURCES_PATH/init $INITRAMFS_PATH/init
 pushd $INITRAMFS_PATH
 find . | cpio -H newc -o | gzip > $LIVE_ISO_PATH/boot/initramfs.img
 popd
 cp -f $KERNEL_BUILD_PATH/linux-6.8.12/arch/powerpc/boot/zImage $LIVE_ISO_PATH/boot/vmlinuz
-cp -f $(pwd)/resources/yaboot.conf $LIVE_ISO_PATH/etc/yaboot.conf
+cp -f $RESOURCES_PATH/yaboot.conf $LIVE_ISO_PATH/etc/yaboot.conf
 mksquashfs $CHROOT_PATH $LIVE_ISO_PATH/LiveOS/liveroot.img -comp xz -b 1M -Xdict-size 100% -noappend
 mkisofs -r -J -V PS3LIVE -o $LIVE_ISO_PATH.iso $LIVE_ISO_PATH
 
-echo "Done. Live ISO root password is HACKTHEPLANET"
+echo "Done. Live ISO root password: HACKTHEPLANET"
 
 exit 0
 
