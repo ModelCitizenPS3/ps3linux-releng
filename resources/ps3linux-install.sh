@@ -56,11 +56,12 @@ done
 
 mkswap $SWAP_PART
 swapon -p 50 $SWAP_PART
-mkfs -t ext4 $ROOT_PART
 mount -t ext4 $ROOT_PART /mnt/target
-rm -rf /mnt/target/lost+found
+rm -rf /mnt/target/*
+sed -i 's/enabled=1/enabled=0/g' /mnt/target/etc/yum.repos.d/fedora-updates.repo
+cp -f /root/ps3linux.repo /mnt/target/etc/yum.repos.d/ps3linux.repo
 dnf -y --releasever=28 --forcearch=ppc64 --installroot=/mnt/target install filesystem
-rm -fv /mnt/target/dev/null
+rm -f /mnt/target/dev/null
 mknod -m 600 /mnt/target/dev/console c 5 1
 mknod -m 666 /mnt/target/dev/null c 1 3
 mount -t proc /proc /mnt/target/proc
@@ -69,11 +70,9 @@ mount -o bind /dev /mnt/target/dev
 mount -o bind /dev/pts /mnt/target/dev/pts
 mount -t tmpfs tmpfs /mnt/target/run
 mount -t tmpfs tmpfs /mnt/target/tmp
-sed -i 's/enabled=1/enabled=0/g' /mnt/target/etc/yum.repos.d/fedora-updates.repo
-cp -fv /root/ps3linux.repo /mnt/target/etc/yum.repos.d/ps3linux.repo
 cat > /mnt/target/etc/fstab << EOF
 $ROOT_PART / ext4 noatime 0 1
-$SWAP_PART none swap sw,pri=1 0 0
+$SWAP_PART swap swap pri=1 0 0
 spufs /spu soufs defaults 0 0
 EOF
 dnf -y --releasever=28 --forcearch=ppc64 --installroot=/mnt/target groupinstall core
@@ -86,13 +85,16 @@ partition=$PARTITION
 image=/boot/vmlinuz-1.PS3.fc28.ppc64
     label=PS3LINUX
     read-only
-    append="video=ps3fb:mode:1667 selinux=0 audit=0"
+    append="video=ps3fb:mode:1667 root=$ROOT_PART selinux=0 audit=0"
 EOF
 #chroot /mnt/target /usr/bin/dnf --releasever=28 --forcearch=ppc64 install bash-completion kernel kernel-core kernel-modules kernel-headers kernel-devel
-
 umount /mnt/target/tmp
 umount /mnt/target/run
 umount /mnt/target/dev/pts
 umount /mnt/target/dev
 umount /mnt/target/sys
 umount /mnt/target/proc
+umount /mnt/target
+echo "PS3LINUX install complete. Reboot the Playstation 3..."
+exit 0
+

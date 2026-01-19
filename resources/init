@@ -1,33 +1,31 @@
-#!/usr/sbin/busybox sh
-
-PATH=/usr/bin:/usr/sbin:/bin:/sbin
+#!/usr/bin/bash
 
 # Mount virtual filesystems
-mount -t proc none /proc
-mount -t sysfs none /sys
-mount -t devtmpfs none /dev
+/usr/bin/mount -t proc none /proc
+/usr/bin/mount -t sysfs none /sys
+/usr/bin/mount -t devtmpfs none /dev
 
-sleep 2
+/usr/bin/sleep 2
 
 # Search devices for boot ISO
 for dev in /dev/sda /dev/sdb /dev/sr0; do
     if [ -b "$dev" ]; then
-        echo "Found boot ISO on $dev. Mounting..."
-        mount -t iso9660 -o loop,ro "$dev" /mnt/iso && break
+        /usr/bin/echo "Found boot ISO on $dev. Mounting..."
+        /usr/bin/mount -t iso9660 -o loop,ro "$dev" /mnt/iso && break
     fi
 done
 
 # Mount the squashfs live image and the overlay filesystem
-mount -t squashfs -o ro /mnt/iso/LiveOS/liveroot.img /mnt/lower
-mount -t tmpfs tmpfs /mnt/upper
-mkdir -p /mnt/upper/upper /mnt/upper/work
-mount -t overlay overlay -o lowerdir=/mnt/lower,upperdir=/mnt/upper/upper,workdir=/mnt/upper/work /mnt/sysroot
+/usr/bin/mount -t squashfs -o ro /mnt/iso/LiveOS/liveroot.img /mnt/lower
+/usr/bin/mount -t tmpfs tmpfs /mnt/upper
+/usr/bin/mkdir -p /mnt/upper/upper /mnt/upper/work
+/usr/bin/mount -t overlay overlay -o lowerdir=/mnt/lower,upperdir=/mnt/upper/upper,workdir=/mnt/upper/work /mnt/sysroot
 
 # Move mounts required by systemd
-mount --move /proc /mnt/sysroot/proc
-mount --move /sys  /mnt/sysroot/sys
-mount --move /dev  /mnt/sysroot/dev
+/usr/bin/mount --move /proc /mnt/sysroot/proc
+/usr/bin/mount --move /sys  /mnt/sysroot/sys
+/usr/bin/mount --move /dev  /mnt/sysroot/dev
 
 # Switch to real root
-exec switch_root /mnt/sysroot /sbin/init
+exec /usr/sbin/switch_root /mnt/sysroot /sbin/init
 
