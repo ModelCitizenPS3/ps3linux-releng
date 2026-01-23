@@ -52,7 +52,7 @@ echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf --releasever=28 --forcearch=x86_64 clean all
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf --releasever=28 --forcearch=x86_64 makecache
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 install filesystem dnf perl-interpreter ncurses ncurses-devel binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel binutils-powerpc64-linux-gnu gcc-powerpc64-linux-gnu xz findutils kmod
-chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.8.12.tar.xz
+chroot $KERNEL_BUILD_PATH /usr/bin/wget -4 https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.8.12.tar.xz
 chroot $KERNEL_BUILD_PATH /usr/bin/tar xf linux-6.8.12.tar.xz
 cp -f $RESOURCES_PATH/0011-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
 cp -f $RESOURCES_PATH/config-6.8.12-live $KERNEL_BUILD_PATH/linux-6.8.12/.config
