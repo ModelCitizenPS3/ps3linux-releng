@@ -3,7 +3,7 @@
 set -eo pipefail
 
 if (( EUID != 0 )); then
-    echo "Error: This script must be run as root." >&2
+    echo "Achtung! This script must be run as root." >&2
     exit 1
 fi
 
@@ -27,6 +27,14 @@ Options:
   --swap DEVICE             name and partition number of the swap device as seen by the kernel
                             example: /dev/ps3dd1
   --help                    show this help
+
+NOTE: This script should only be run AFTER the PS3's Linux drive (/dev/ps3da or /dev/ps3dd) has
+    been partitioned. You can partition the PS3's Linux HDD with fdisk.
+    
+    Suggested layout:   Name        Type        Size
+                        /dev/ps3da1 Linux Swap  4 GiB (4096 MiB)
+                        /dev/ps3da2 Linux       rest of drive (use this partition as root)
+
 EOF
     exit 1
 }
@@ -68,53 +76,87 @@ done
 echo "~~~~~~~~~~~~~~~~~~~~~~~"
 echo "PS3LINUX INSTALL SCRIPT"
 echo "~~~~~~~~~~~~~~~~~~~~~~~"
+
+# Activate HDD swap partition
 mkswap $SWAP_PART
 swapon -p 50 $SWAP_PART
-echo "Formatting root partition. Select y to continue..."
+
+# Format and mount root partition
+echo "Formatting root partition as ext4. Select y to continue."
 mkfs -t ext4 $ROOT_PART
-echo "Mounting root partition at /mnt/target..."
 mount -t ext4 $ROOT_PART /mnt/target
 rm -rf /mnt/target/*
-echo "Building dnf metadata cache (patience is a virtue)..."
+echo "Mounted root device at /mnt/target..."
+
+# Create root filesystem and mount virtual filesystems
+echo "Building dnf metadata cache (this can take several minutes)."
 dnf -y --releasever=28 --forcearch=ppc64 --installroot=/mnt/target install filesystem
 rm -f /mnt/target/dev/null
 mknod -m 600 /mnt/target/dev/console c 5 1
 mknod -m 666 /mnt/target/dev/null c 1 3
-echo "Mounting virtual ker filesystems..."
 mount -t proc /proc /mnt/target/proc
 mount -t sysfs /sys /mnt/target/sys
 mount -o bind /dev /mnt/target/dev
 mount -o bind /dev/pts /mnt/target/dev/pts
 mount -t tmpfs tmpfs /mnt/target/run
 mount -t tmpfs tmpfs /mnt/target/tmp
-echo "Generating target fstab file..."
+echo "Mounted virtual filesystems (proc, sys, dev, run, tmp)."
+
+# Create fstab, configure dnf repos, create yaboot.conf
+echo "Generating /etc/fstab..."
 cat > /mnt/target/etc/fstab << EOF
 $ROOT_PART / ext4 noatime 0 1
 $SWAP_PART swap swap pri=1 0 0
 spufs /spu spufs defaults 0 0
 EOF
-echo "Preparing target repo configs..."
-cp -f /etc/yum.repos.d/ps3linux.repo /mnt/target/etc/yum.repos.d/ps3linux.repo
+echo "Configuring dnf repos..."
 sed -i 's/enabled=1/enabled=0/g' /mnt/target/etc/yum.repos.d/fedora-updates.repo
-echo "Installing dnf core package group..."
-dnf -y --releasever=28 --forcearch=ppc64 --installroot=/mnt/target groupinstall core
-sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /mnt/target/etc/selinux/config
-echo "Configuring target system..."
-echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="/sbin/swapon -p 2 /dev/ps3vram"' > /mnt/target/etc/udev/rules.d/10-ps3vram.rules
-echo "nameserver 8.8.8.8" > /mnt/target/etc/resolv.conf
+cp /root/ps3linux.repo /mnt/target/etc/yum.repos.d/ps3linux.repo
 cat > /mnt/target/etc/yaboot.conf << EOF
 boot=$BOOT_DEV
 partition=$PARTITION
 EOF
-echo "Installing kernel (and some other packages)..."
-chroot /mnt/target /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 install passwd bash-completion kernel-6.8.12-1.PS3.fc28 kernel-core-6.8.12-1.PS3.fc28 kernel-modules-6.8.12-1.PS3.fc28 kernel-headers-6.8.12-1.PS3.fc28 kernel-cross-headers-6.8.12-1.PS3.fc28 kernel-devel-6.8.12-1.PS3.fc28
-echo "Setting up bootloader config yaboot.conf..."
-sed -i "s|append=|append=\"video=ps3fb:mode:1667 root=$ROOT_PART selinux=0 audit=0\"|" /mnt/target/etc/yaboot.conf
-echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-echo "Please Set a root password..."
-echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+
+# Install core package group, kernel packages, and any additional packages
+echo "Installing core packages..."
+dnf -y --releasever=28 --forcearch=ppc64 --installroot=/mnt/target groupinstall core
+echo "Installing kernel (and other packages)..."
+echo "nameserver 8.8.8.8" > /mnt/target/etc/resolv.conf
+chroot /mnt/target /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 install kernel kernel-headers bash-completion nfs-utils wpa_supplicant dnf-utils dosfstools tree sed man-db vim
+sed -i "s|append=\"\"|append=\"video=ps3fb:mode:1669 root=$ROOT_PART selinux=0 audit=0\"|" /mnt/target/etc/yaboot.conf
+echo "Generated bootloader config /etc/yaboot.conf..."
+
+# Perform remaining configuration
+echo "Configuring PS3LINUX..."
+sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /mnt/target/etc/selinux/config
+echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="/sbin/swapon -p 2 /dev/ps3vram"' > /mnt/target/etc/udev/rules.d/10-ps3vram.rules
+echo "vm.swappiness = 10" >> /mnt/target/etc/sysctl.conf
+echo "ps3vram" > /mnt/target/etc/modules-load.d/ps3vram.conf
+cp /root/motd /mnt/target/etc/motd
+cat > /mnt/target/etc/systemd/network/10-eth0.network << EOF
+[Match]
+Name=eth0
+
+[Network]
+DHCP=yes
+EOF
+chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
+chroot /mnt/target /usr/bin/systemctl disable auditd.service
+chroot /mnt/target /usr/bin/systemctl disable fedora-readonly.service
+chroot /mnt/target /usr/bin/systemctl disable wpa_supplicant.service
+chroot /mnt/target /usr/bin/systemctl disable firewalld.service
+chroot /mnt/target /usr/bin/systemctl disable NetworkManager.service
+chroot /mnt/target /usr/bin/systemctl disable dbus-org.freedesktop.NetworkManager.service
+chroot /mnt/target /usr/bin/systemctl disable dbus-org.freedesktop.nm-dispatcher.service
+chroot /mnt/target /usr/bin/systemctl disable NetworkManager-wait-online.service
+chroot /mnt/target /usr/bin/systemctl enable systemd-networkd.service
+chroot /mnt/target /usr/bin/systemctl disable systemd-networkd.socket
+echo "~~~~~~~~~~~~~~~~~~~~~~"
+echo "Set a root password..."
+echo "~~~~~~~~~~~~~~~~~~~~~~"
 chroot /mnt/target /usr/bin/passwd root
-echo "Unmounting virtual filesystems..."
+
+# Unmount filesystems
 umount /mnt/target/tmp
 umount /mnt/target/run
 umount /mnt/target/dev/pts
@@ -122,8 +164,10 @@ umount /mnt/target/dev
 umount /mnt/target/sys
 umount /mnt/target/proc
 umount /mnt/target
+echo "Unmounted filesystems."
 echo ""
 echo "PS3LINUX install complete."
 echo "You may reboot your Playstation 3."
+echo ""
 exit 0
 

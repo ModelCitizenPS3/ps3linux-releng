@@ -4,28 +4,31 @@
 /usr/bin/mount -t proc none /proc
 /usr/bin/mount -t sysfs none /sys
 /usr/bin/mount -t devtmpfs none /dev
+/usr/bin/mount -t tmpfs none /tmp
+/usr/bin/mount -t tmpfs none /run
 
 /usr/bin/sleep 2
 
 # Search devices for boot ISO
 for dev in /dev/sda /dev/sdb /dev/sr0; do
     if [ -b "$dev" ]; then
-        /usr/bin/echo "Found boot ISO on $dev. Mounting..."
-        /usr/bin/mount -t iso9660 -o loop,ro "$dev" /mnt/iso && break
+        /usr/bin/mount -t iso9660 -o loop,ro "$dev" /iso && break
     fi
 done
 
 # Mount the squashfs live image and the overlay filesystem
-/usr/bin/mount -t squashfs -o ro /mnt/iso/LiveOS/liveroot.img /mnt/lower
-/usr/bin/mount -t tmpfs tmpfs /mnt/upper
-/usr/bin/mkdir -p /mnt/upper/upper /mnt/upper/work
-/usr/bin/mount -t overlay overlay -o lowerdir=/mnt/lower,upperdir=/mnt/upper/upper,workdir=/mnt/upper/work /mnt/sysroot
+/usr/bin/mount -t squashfs -o ro /iso/LiveOS/liveroot.img /lower
+/usr/bin/mount -t tmpfs tmpfs /upper
+/usr/bin/mkdir -p /upper/{work,upper}
+/usr/bin/mount -t overlay overlay -o lowerdir=/lower,upperdir=/upper/upper,workdir=/upper/work /sysroot
 
 # Move mounts required by systemd
-/usr/bin/mount --move /proc /mnt/sysroot/proc
-/usr/bin/mount --move /sys  /mnt/sysroot/sys
-/usr/bin/mount --move /dev  /mnt/sysroot/dev
+/usr/bin/mount --move /proc /sysroot/proc
+/usr/bin/mount --move /sys  /sysroot/sys
+/usr/bin/mount --move /dev  /sysroot/dev
+/usr/bin/mount --move /tmp  /sysroot/tmp
+/usr/bin/mount --move /run  /sysroot/run
 
 # Switch to real root
-exec /usr/sbin/switch_root /mnt/sysroot /sbin/init
+exec /usr/sbin/switch_root /sysroot /sbin/init
 
