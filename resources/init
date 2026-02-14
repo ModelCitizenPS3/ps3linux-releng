@@ -7,7 +7,7 @@
 /usr/bin/mount -t tmpfs none /tmp
 /usr/bin/mount -t tmpfs none /run
 
-/usr/bin/sleep 2
+/usr/bin/sleep 3
 
 # Search devices for boot ISO
 for dev in /dev/sda /dev/sdb /dev/sr0; do

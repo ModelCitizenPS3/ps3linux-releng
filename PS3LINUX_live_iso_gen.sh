@@ -7,12 +7,13 @@ if (( EUID != 0 )); then
     exit 1
 fi
 
+KVER="6.9.12"
 CHROOT_PATH="$(pwd)/PS3LINUX_chroot"
 KERNEL_BUILD_PATH="$(pwd)/FC28-x86_64_chroot"
 LIVE_ISO_PATH="$(pwd)/PS3LINUX_LIVE_ISO"
 INITRAMFS_PATH="$(pwd)/initramfs"
 RESOURCES_PATH="$(pwd)/resources"
-EXCLUDES="NetworkManager,NetworkManager-libnm,libndp,sssd-common,sssd-client,libtevent,c-ares,http-parser,jansson,libdhash,libldb,libsss_certmap,libsss_idmap,libsss_nss_idmap,libtalloc,libtdb,ppc64-utils,kernel-bootwrapper,libservicelog,lsvpd,perl-Data-Dumper,perl-Errno,perl-Exporter,perl-File-Path,perl-IO,perl-PathTools,perl-Scalar-List-Utils,perl-Socket,perl-Text-Tabs+Wrap,perl-Unicode-Normalize,perl-constant,perl-interpreter,perl-libs,perl-macros,perl-parent,perl-threads,perl-threads-shared,powerpc-utils,powerpc-utils-core,bc,binutils,librtas,libvpd,perl-Carp,sg3_utils-libs,passwd,libuser,dracut,dracut-config-rescue,plymouth-scripts,firewalld,python3-dbus.python3-firewall,python3-slip,python3-slip-dbus,dbus-glib,ebtables,firewalld-filesystem,ipset,ipset-libs,iptables,libnetfilter_conntrack,libnfnetlink,python3-decorator,python3-libselinux,grub2-common,grub2-tools,grub2-tools-minimal,grubby,file,gettext,gettext-libs,libcroco,libgomp,os-prober,which,policycoreutils,libselinux-utils,openssh-clients,libedit,selinux-policy,selinux-policy-targeted,keyutils,libini_config,libverto-libev,nfs-utils,gssproxy,libbasicobjects.libcollection,libev,libevent,libnfsidmap,libpath_utils,libref_array,quota,quota-nls,rpcbind,diffutils"
+#EXCLUDES="NetworkManager,NetworkManager-libnm,libndp,sssd-common,sssd-client,libtevent,c-ares,http-parser,jansson,libdhash,libldb,libsss_certmap,libsss_idmap,libsss_nss_idmap,libtalloc,libtdb,ppc64-utils,kernel-bootwrapper,libservicelog,lsvpd,perl-Data-Dumper,perl-Errno,perl-Exporter,perl-File-Path,perl-IO,perl-PathTools,perl-Scalar-List-Utils,perl-Socket,perl-Text-Tabs+Wrap,perl-Unicode-Normalize,perl-constant,perl-interpreter,perl-libs,perl-macros,perl-parent,perl-threads,perl-threads-shared,powerpc-utils,powerpc-utils-core,bc,binutils,librtas,libvpd,perl-Carp,sg3_utils-libs,passwd,libuser,dracut,dracut-config-rescue,plymouth-scripts,firewalld,python3-dbus.python3-firewall,python3-slip,python3-slip-dbus,dbus-glib,ebtables,firewalld-filesystem,ipset,ipset-libs,iptables,libnetfilter_conntrack,libnfnetlink,python3-decorator,python3-libselinux,grub2-common,grub2-tools,grub2-tools-minimal,grubby,file,gettext,gettext-libs,libcroco,libgomp,os-prober,which,policycoreutils,libselinux-utils,openssh-clients,libedit,selinux-policy,selinux-policy-targeted,keyutils,libini_config,libverto-libev,nfs-utils,gssproxy,libbasicobjects.libcollection,libev,libevent,libnfsidmap,libpath_utils,libref_array,quota,quota-nls,rpcbind,diffutils"
 
 if [ -d "$KERNEL_BUILD_PATH" ]; then
     echo "Error: Directory $KERNEL_BUILD_PATH exists. Please delete it." >&2
@@ -49,27 +50,26 @@ mount -t tmpfs tmpfs $KERNEL_BUILD_PATH/tmp
 dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install dnf
 sed -i 's/enabled=1/enabled=0/g' $KERNEL_BUILD_PATH/etc/yum.repos.d/fedora-updates.repo
 echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf --releasever=28 --forcearch=x86_64 clean all
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf --releasever=28 --forcearch=x86_64 makecache
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 install filesystem dnf perl-interpreter ncurses-devel binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel gcc-ppc64-linux-gnu binutils-powerpc64-linux-gnu xz findutils kmod vi
-chroot $KERNEL_BUILD_PATH /usr/bin/wget -4 https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.8.12.tar.xz
-chroot $KERNEL_BUILD_PATH /usr/bin/tar xf linux-6.8.12.tar.xz
+chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 install filesystem dnf perl-interpreter binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel gcc-powerpc64-linux-gnu binutils-powerpc64-linux-gnu xz findutils kmod
+chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-$KVER.tar.xz
+chroot $KERNEL_BUILD_PATH /usr/bin/tar -xf linux-$KVER.tar.xz
 cp -f $RESOURCES_PATH/0010-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
-cp -f $RESOURCES_PATH/config-6.8.12-live $KERNEL_BUILD_PATH/linux-6.8.12/.config
-chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-6.8.12 -p1 -i /0010-ps3stor-multiple-regions.patch
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 olddefconfig
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 -j1 zImage modules
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-6.8.12 modules_install
-rm -f $KERNEL_BUILD_PATH/lib/modules/6.8.12/build
-rm -f $KERNEL_BUILD_PATH/lib/modules/6.8.12/source
+cp -f $RESOURCES_PATH/config-$KVER-live $KERNEL_BUILD_PATH/linux-$KVER/.config
+chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-$KVER -p1 -i /0010-ps3stor-multiple-regions.patch
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KVER olddefconfig
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KVER -j1 zImage modules
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KVER modules_install
+rm -f $KERNEL_BUILD_PATH/lib/modules/$KVER/build
 umount $KERNEL_BUILD_PATH/tmp
 umount $KERNEL_BUILD_PATH/run
 umount $KERNEL_BUILD_PATH/dev/pts
 umount $KERNEL_BUILD_PATH/dev
 umount $KERNEL_BUILD_PATH/sys
 umount $KERNEL_BUILD_PATH/proc
+
+
 mkdir -p "$CHROOT_PATH"
-dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=$EXCLUDES install filesystem
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH install filesystem
 rm -f $CHROOT_PATH/dev/null
 mknod -m 600 $CHROOT_PATH/dev/console c 5 1
 mknod -m 666 $CHROOT_PATH/dev/null c 1 3
@@ -80,19 +80,17 @@ mount -o bind /dev $CHROOT_PATH/dev
 mount -o bind /dev/pts $CHROOT_PATH/dev/pts
 mount -t tmpfs tmpfs $CHROOT_PATH/run
 mount -t tmpfs tmpfs $CHROOT_PATH/tmp
-dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=$EXCLUDES install dnf
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH install dnf
 sed -i 's/enabled=1/enabled=0/g' $CHROOT_PATH/etc/yum.repos.d/fedora-updates.repo
 echo "ps3linux" > $CHROOT_PATH/etc/hostname
 echo "nameserver 8.8.8.8" > $CHROOT_PATH/etc/resolv.conf
-chroot $CHROOT_PATH /usr/bin/dnf --releasever=28 --forcearch=ppc64 clean all
-chroot $CHROOT_PATH /usr/bin/dnf --releasever=28 --forcearch=ppc64 makecache
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=$EXCLUDES groupinstall core
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=$EXCLUDES install udisks2-zram bash-completion wget wpa_supplicant
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs groupinstall core
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs install udisks2-zram bash-completion wget wpa_supplicant nano
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 rm -f $CHROOT_PATH/etc/yum.repos.d/*.rpmnew
 mv -f $CHROOT_PATH/etc/nsswitch.conf $CHROOT_PATH/etc/nsswitch.conf.orig
 mv -f $CHROOT_PATH/etc/nsswitch.conf.rpmnew $CHROOT_PATH/etc/nsswitch.conf
-cp -rf $KERNEL_BUILD_PATH/lib/modules/6.8.12 $CHROOT_PATH/lib/modules/
+cp -rf $KERNEL_BUILD_PATH/lib/modules/$KVER $CHROOT_PATH/lib/modules/
 echo "ps3vram" > $CHROOT_PATH/etc/modules-load.d/ps3vram.conf
 echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="/sbin/swapon -p 200 /dev/ps3vram"' > $CHROOT_PATH/etc/udev/rules.d/10-ps3vram.rules
 chmod 0200 $CHROOT_PATH/etc/shadow
@@ -117,18 +115,19 @@ mkdir $CHROOT_PATH/mnt/target
 cp $RESOURCES_PATH/zram-swap.sh $CHROOT_PATH/usr/sbin/zram-swap.sh
 cp $RESOURCES_PATH/zram-swap.service $CHROOT_PATH/etc/systemd/system/zram-swap.service
 cp $RESOURCES_PATH/ps3linux-install.sh $CHROOT_PATH/usr/sbin/ps3linux-install.sh
-cp $RESOURCES_PATH/ps3linux.repo $CHROOT_PATH/etc/yum.repos.d/ps3linux.repo
 cp $RESOURCES_PATH/ps3linux.repo $CHROOT_PATH/root/ps3linux.repo
 cp $RESOURCES_PATH/motd $CHROOT_PATH/root/motd
 cp -f $RESOURCES_PATH/motd $CHROOT_PATH/etc/motd
-cat > $CHROOT_PATH/etc/motd << EOF
+cat >> $CHROOT_PATH/etc/motd << EOF
 
 ACHTUNG: Run "ps3linux-install.sh --help"
+
 EOF
+chroot $CHROOT_PATH /usr/bin/systemctl set-default multi-user.target
+chroot $CHROOT_PATH /usr/bin/systemctl disable NetworkManager.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable NetworkManager-wait-online.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable auditd.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-readonly.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable wpa_supplicant.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable dbus-org.fedoraproject.FirewallD1.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable firewalld.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable dnf-makecache.timer
 chroot $CHROOT_PATH /usr/bin/systemctl enable systemd-networkd.service
@@ -142,8 +141,11 @@ umount $CHROOT_PATH/sys
 umount $CHROOT_PATH/proc
 rm -rf $CHROOT_PATH/usr/share/doc
 rm -rf $CHROOT_PATH/usr/share/man
+rm -rf $CHROOT_PATH/lib/firmware/*
 find $CHROOT_PATH -type f \( -perm -111 -o -name '*.so*' -o -name '*.ko' \) -exec file {} \; | grep 'ELF' | cut -d: -f1 | while read f; do echo "Stripping $f"; powerpc64-linux-gnu-strip --strip-unneeded "$f" || true; done
 find $CHROOT_PATH/usr/lib64 -name '*.a' -delete
+
+
 mkdir -p $INITRAMFS_PATH/{dev,iso,lower,mnt,proc,run,sys,sysroot/{dev,proc,run,sys,tmp},tmp,usr/{bin,lib,lib64,sbin},upper/{upper,work}}
 pushd $INITRAMFS_PATH
 ln -s usr/bin bin
@@ -154,7 +156,7 @@ popd
 mkdir -p $INITRAMFS_PATH/lib/modules
 mknod -m 600 $INITRAMFS_PATH/dev/console c 5 1
 mknod -m 666 $INITRAMFS_PATH/dev/null c 1 3
-cp -rf $KERNEL_BUILD_PATH/lib/modules/6.8.12 $INITRAMFS_PATH/lib/modules/
+cp -rf $KERNEL_BUILD_PATH/lib/modules/$KVER $INITRAMFS_PATH/lib/modules/
 cp -f $RESOURCES_PATH/init $INITRAMFS_PATH/init
 cp $CHROOT_PATH/usr/bin/mount $INITRAMFS_PATH/usr/bin/mount
 cp $CHROOT_PATH/usr/bin/sleep $INITRAMFS_PATH/usr/bin/sleep
@@ -193,10 +195,10 @@ pushd $INITRAMFS_PATH
 mkdir -p $LIVE_ISO_PATH/{boot,etc,LiveOS}
 find . | cpio -H newc -o | gzip > $LIVE_ISO_PATH/boot/initramfs.img
 popd
-cp -f $KERNEL_BUILD_PATH/linux-6.8.12/arch/powerpc/boot/zImage $LIVE_ISO_PATH/boot/vmlinuz
+cp -f $KERNEL_BUILD_PATH/linux-$KVER/arch/powerpc/boot/zImage $LIVE_ISO_PATH/boot/vmlinuz
 cp -f $RESOURCES_PATH/yaboot.conf $LIVE_ISO_PATH/etc/yaboot.conf
 mksquashfs $CHROOT_PATH $LIVE_ISO_PATH/LiveOS/liveroot.img -comp xz -b 1M -Xdict-size 100% -noappend
-mkisofs -r -J -V PS3LIVE -o $LIVE_ISO_PATH.iso $LIVE_ISO_PATH
+mkisofs -r -J -V PS3LIVE -o PS3LINUX_Live_ISO.iso $LIVE_ISO_PATH
 echo ""
 echo "Done. Live ISO root password: HACKTHEPLANET"
 echo ""
