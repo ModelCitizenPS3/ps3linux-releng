@@ -7,20 +7,20 @@ If you are interested in developing for PS3LINUX but do not have a dedicated Lin
 ### Dependencies
 
 1. a Fedora operating system - my scripts are heavily dependent on the dnf package manager
-2. qemu - for running programs executed within a ppc64 chroot  `sudo dnf install qemu`
-3. enable systemd's proc-sys-fs-binfmt_misc.mount unit:  `sudo systemctl enable proc-sys-fs-binfmt_misc.mount`
-4. optional - add your user to the kvm group:  `sudo usermod -aG kvm <USERNAME>`
-5. iso mastering utils (mksquashfs, mkisofs, etc):  `sudo dnf install squashfs-tools genisoimage xorriso`
+2. qemu - for running programs executed within a ppc64 chroot: `sudo dnf install qemu`
+3. enable systemd's proc-sys-fs-binfmt_misc.mount unit: `sudo systemctl enable proc-sys-fs-binfmt_misc.mount`
+4. optional - add your user to the kvm group: `sudo usermod -aG kvm <USERNAME>`
+5. iso mastering utils (mksquashfs, mkisofs, etc): `sudo dnf install squashfs-tools genisoimage xorriso`
 
 ### How to use
 
 NOTE - All the scripts in the toplevel directory are meant to be run as root and will fail/exit if run without root privileges.
 
-1. clone this repo:  `git clone https://github.com/ModelCitizenPS3/ps3linux-releng.git`
-2. enter repo directory:  `cd ps3linux-releng`
-3. run script:  `sudo ./PS3LINUX_live_iso_gen.sh`
+1. clone this repo: `git clone https://github.com/ModelCitizenPS3/ps3linux-releng.git`
+2. enter repo directory: `cd ps3linux-releng`
+3. run script: `sudo ./PS3LINUX_live_iso_gen.sh`
 5. you should now have the file `PS3LINUX_Live_ISO.iso`
-6. burn the image to a USB or CD/DVD:  `sudo dd if=PS3LINUX_LIVE_ISO.iso of=<USB DEVICE>` - USB device will be something like `/dev/sda`
+6. burn the image to a USB or CD/DVD: `sudo dd if=PS3LINUX_LIVE_ISO.iso of=<USB DEVICE>` - USB device will be something like `/dev/sda`
 7. BE CAREFUL WITH THE DD COMMAND. Double check that you set `of` (output file) correctly!
 8. insert USB in your PS3 and boot `PS3LIVE` from your petitboot bootloader menu
 9. login as root - password is `HACKTHEPLANET`
