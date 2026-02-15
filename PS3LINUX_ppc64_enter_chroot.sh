@@ -4,7 +4,7 @@ set -euo pipefail
 
 [ $(id -u) -eq 0 ] || exit 1
 
-CHROOT_PATH=$(pwd)/PS3LINUX_chroot
+CHROOT_PATH=$(pwd)/PS3LINUX_ppc64_chroot_kept
 
 mount -t proc /proc $CHROOT_PATH/proc
 mount -t sysfs /sys $CHROOT_PATH/sys

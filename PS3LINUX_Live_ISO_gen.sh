@@ -2,18 +2,42 @@
 
 set -eo pipefail
 
+
+# Check if we have root privileges
+
 if (( EUID != 0 )); then
     echo "Error: This script must be run as root." >&2
     exit 1
 fi
 
+
+# Set variables
+
 KVER="6.9.12"
-CHROOT_PATH="$(pwd)/PS3LINUX_chroot"
-KERNEL_BUILD_PATH="$(pwd)/FC28-x86_64_chroot"
-LIVE_ISO_PATH="$(pwd)/PS3LINUX_LIVE_ISO"
+KEEP=0
+KERNEL_BUILD_PATH="$(pwd)/PS3LINUX_x86_64_chroot"
+CHROOT_PATH="$(pwd)/PS3LINUX_ppc64_chroot"
+LIVE_ISO_PATH="$(pwd)/PS3LINUX_Live_ISO"
 INITRAMFS_PATH="$(pwd)/initramfs"
 RESOURCES_PATH="$(pwd)/resources"
-#EXCLUDES="NetworkManager,NetworkManager-libnm,libndp,sssd-common,sssd-client,libtevent,c-ares,http-parser,jansson,libdhash,libldb,libsss_certmap,libsss_idmap,libsss_nss_idmap,libtalloc,libtdb,ppc64-utils,kernel-bootwrapper,libservicelog,lsvpd,perl-Data-Dumper,perl-Errno,perl-Exporter,perl-File-Path,perl-IO,perl-PathTools,perl-Scalar-List-Utils,perl-Socket,perl-Text-Tabs+Wrap,perl-Unicode-Normalize,perl-constant,perl-interpreter,perl-libs,perl-macros,perl-parent,perl-threads,perl-threads-shared,powerpc-utils,powerpc-utils-core,bc,binutils,librtas,libvpd,perl-Carp,sg3_utils-libs,passwd,libuser,dracut,dracut-config-rescue,plymouth-scripts,firewalld,python3-dbus.python3-firewall,python3-slip,python3-slip-dbus,dbus-glib,ebtables,firewalld-filesystem,ipset,ipset-libs,iptables,libnetfilter_conntrack,libnfnetlink,python3-decorator,python3-libselinux,grub2-common,grub2-tools,grub2-tools-minimal,grubby,file,gettext,gettext-libs,libcroco,libgomp,os-prober,which,policycoreutils,libselinux-utils,openssh-clients,libedit,selinux-policy,selinux-policy-targeted,keyutils,libini_config,libverto-libev,nfs-utils,gssproxy,libbasicobjects.libcollection,libev,libevent,libnfsidmap,libpath_utils,libref_array,quota,quota-nls,rpcbind,diffutils"
+
+
+# Parse command line arguments
+
+for arg in "$@"; do
+    case "$arg" in
+        --keep)
+            KEEP=1
+            ;;
+        *)
+            echo "Unknown argument: $arg"
+            exit 1
+            ;;
+    esac
+done
+
+
+# Check if subdirectories for build already exist
 
 if [ -d "$KERNEL_BUILD_PATH" ]; then
     echo "Error: Directory $KERNEL_BUILD_PATH exists. Please delete it." >&2
@@ -34,6 +58,11 @@ if [ -d "$LIVE_ISO_PATH" ]; then
     echo "Error: Directory $LIVE_ISO_PATH exists. Please delete it." >&2
     exit 1
 fi
+
+
+# Create a Fedora 28 (x86_64) chroot for kernel cross compilation. This is
+#   faster than compiling the kernel directly in a ppc64 chroot as it
+#   doesn't require running a ppc64 gcc toolchain through qemu
 
 mkdir -p "$KERNEL_BUILD_PATH"
 dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install filesystem
@@ -68,8 +97,11 @@ umount $KERNEL_BUILD_PATH/sys
 umount $KERNEL_BUILD_PATH/proc
 
 
+# Create and configure a Fedora 28 (ppc64) chroot. The contents of this chroot
+#   will becone the root file system of our finished live ISO image.
+
 mkdir -p "$CHROOT_PATH"
-dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH install filesystem
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager install filesystem
 rm -f $CHROOT_PATH/dev/null
 mknod -m 600 $CHROOT_PATH/dev/console c 5 1
 mknod -m 666 $CHROOT_PATH/dev/null c 1 3
@@ -80,12 +112,12 @@ mount -o bind /dev $CHROOT_PATH/dev
 mount -o bind /dev/pts $CHROOT_PATH/dev/pts
 mount -t tmpfs tmpfs $CHROOT_PATH/run
 mount -t tmpfs tmpfs $CHROOT_PATH/tmp
-dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH install dnf
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager install dnf
 sed -i 's/enabled=1/enabled=0/g' $CHROOT_PATH/etc/yum.repos.d/fedora-updates.repo
 echo "ps3linux" > $CHROOT_PATH/etc/hostname
 echo "nameserver 8.8.8.8" > $CHROOT_PATH/etc/resolv.conf
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs groupinstall core
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs install udisks2-zram bash-completion wget wpa_supplicant nano
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager groupinstall core
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager install udisks2-zram bash-completion wget wpa_supplicant nano lynx dosfstools
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 rm -f $CHROOT_PATH/etc/yum.repos.d/*.rpmnew
 mv -f $CHROOT_PATH/etc/nsswitch.conf $CHROOT_PATH/etc/nsswitch.conf.orig
@@ -124,8 +156,6 @@ ACHTUNG: Run "ps3linux-install.sh --help"
 
 EOF
 chroot $CHROOT_PATH /usr/bin/systemctl set-default multi-user.target
-chroot $CHROOT_PATH /usr/bin/systemctl disable NetworkManager.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable NetworkManager-wait-online.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable auditd.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable wpa_supplicant.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable firewalld.service
@@ -145,6 +175,9 @@ rm -rf $CHROOT_PATH/lib/firmware/*
 find $CHROOT_PATH -type f \( -perm -111 -o -name '*.so*' -o -name '*.ko' \) -exec file {} \; | grep 'ELF' | cut -d: -f1 | while read f; do echo "Stripping $f"; powerpc64-linux-gnu-strip --strip-unneeded "$f" || true; done
 find $CHROOT_PATH/usr/lib64 -name '*.a' -delete
 
+
+# Create simple initramfs image to handle mounting of virtual filesystems and
+#   switching roots to an overlayfs root directory
 
 mkdir -p $INITRAMFS_PATH/{dev,iso,lower,mnt,proc,run,sys,sysroot/{dev,proc,run,sys,tmp},tmp,usr/{bin,lib,lib64,sbin},upper/{upper,work}}
 pushd $INITRAMFS_PATH
@@ -191,16 +224,32 @@ ln -s libdl-2.27.so libdl.so.2
 ln -s libtinfo.so.6.1 libtinfo.so.6
 ln -s ld-2.27.so ld-linux-x86-64.so.2
 popd
-pushd $INITRAMFS_PATH
+
+
+# Create and populate a directory and convert it to our final LIVE ISO image
+
 mkdir -p $LIVE_ISO_PATH/{boot,etc,LiveOS}
+pushd $INITRAMFS_PATH
 find . | cpio -H newc -o | gzip > $LIVE_ISO_PATH/boot/initramfs.img
 popd
 cp -f $KERNEL_BUILD_PATH/linux-$KVER/arch/powerpc/boot/zImage $LIVE_ISO_PATH/boot/vmlinuz
 cp -f $RESOURCES_PATH/yaboot.conf $LIVE_ISO_PATH/etc/yaboot.conf
 mksquashfs $CHROOT_PATH $LIVE_ISO_PATH/LiveOS/liveroot.img -comp xz -b 1M -Xdict-size 100% -noappend
 mkisofs -r -J -V PS3LIVE -o PS3LINUX_Live_ISO.iso $LIVE_ISO_PATH
+
+
+# Clean up (delete or rename subdirectories used during build)
+
+if [[ "$KEEP" -eq 1 ]]; then
+    mv -f "$KERNEL_BUILD_PATH" "${KERNEL_BUILD_PATH}_kept"
+    mv -f "$CHROOT_PATH" "${CHROOT_PATH}_kept"
+    mv -f "$INITRAMFS_PATH" "${INITRAMFS_PATH}_kept"
+    mv -f "$LIVE_ISO_PATH" "${LIVE_ISO_PATH}_kept"
+else
+    rm -rf $KERNEL_BUILD_PATH $CHROOT_PATH $INITRAMFS_PATH $LIVE_ISO_PATH
+fi
+
 echo ""
-echo "Done. Live ISO root password: HACKTHEPLANET"
+echo "Done. Live ISO root password is HACKTHEPLANET. Enjoy!"
 echo ""
-exit 0
 

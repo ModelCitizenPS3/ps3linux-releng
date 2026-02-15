@@ -2,7 +2,7 @@
 
 [ $(id -u) -eq 0 ] || exit 1
 
-CHROOT_PATH="$(pwd)/FC28-x86_64_chroot"
+CHROOT_PATH="$(pwd)/PS3LINUX_x86_64_chroot_kept"
 
 mount -t proc /proc $CHROOT_PATH/proc
 mount -t sysfs /sys $CHROOT_PATH/sys
