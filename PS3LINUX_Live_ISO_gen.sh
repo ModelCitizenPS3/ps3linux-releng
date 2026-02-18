@@ -86,7 +86,7 @@ cp -f $RESOURCES_PATH/0010-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
 cp -f $RESOURCES_PATH/config-$KVER-live $KERNEL_BUILD_PATH/linux-$KVER/.config
 chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-$KVER -p1 -i /0010-ps3stor-multiple-regions.patch
 chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KVER olddefconfig
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KVER -j1 zImage modules
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KVER -j4 zImage modules
 chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KVER modules_install
 rm -f $KERNEL_BUILD_PATH/lib/modules/$KVER/build
 umount $KERNEL_BUILD_PATH/tmp
@@ -101,7 +101,7 @@ umount $KERNEL_BUILD_PATH/proc
 #   will becone the root file system of our finished live ISO image.
 
 mkdir -p "$CHROOT_PATH"
-dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager install filesystem
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager,audit,firewalld install filesystem
 rm -f $CHROOT_PATH/dev/null
 mknod -m 600 $CHROOT_PATH/dev/console c 5 1
 mknod -m 666 $CHROOT_PATH/dev/null c 1 3
@@ -112,13 +112,14 @@ mount -o bind /dev $CHROOT_PATH/dev
 mount -o bind /dev/pts $CHROOT_PATH/dev/pts
 mount -t tmpfs tmpfs $CHROOT_PATH/run
 mount -t tmpfs tmpfs $CHROOT_PATH/tmp
-dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager install dnf
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager,audit,firewalld install dnf
 sed -i 's/enabled=1/enabled=0/g' $CHROOT_PATH/etc/yum.repos.d/fedora-updates.repo
 echo "ps3linux" > $CHROOT_PATH/etc/hostname
 echo "nameserver 8.8.8.8" > $CHROOT_PATH/etc/resolv.conf
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager groupinstall core
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager install udisks2-zram bash-completion wget wpa_supplicant nano lynx dosfstools
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld groupinstall core
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld install udisks2-zram bash-completion wget wpa_supplicant nano lynx dosfstools nfs-utils rsyslog
 chroot $CHROOT_PATH /usr/bin/dnf clean all
+echo "export PS1='\[\e[01;31m\]\h\[\e[01;34m\] \w $\[\e[00m\] '" >> $CHROOT_PATH/root/.bashrc
 rm -f $CHROOT_PATH/etc/yum.repos.d/*.rpmnew
 mv -f $CHROOT_PATH/etc/nsswitch.conf $CHROOT_PATH/etc/nsswitch.conf.orig
 mv -f $CHROOT_PATH/etc/nsswitch.conf.rpmnew $CHROOT_PATH/etc/nsswitch.conf
@@ -155,10 +156,18 @@ cat >> $CHROOT_PATH/etc/motd << EOF
 ACHTUNG: Run "ps3linux-install.sh --help"
 
 EOF
+mkdir -p $CHROOT_PATH/etc/systemd/system/getty@tty1.service.d
+cat > $CHROOT_PATH/etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
+EOF
 chroot $CHROOT_PATH /usr/bin/systemctl set-default multi-user.target
-chroot $CHROOT_PATH /usr/bin/systemctl disable auditd.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-readonly.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-import-state.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable mdmonitor.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable multipathd.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable wpa_supplicant.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable firewalld.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable dnf-makecache.timer
 chroot $CHROOT_PATH /usr/bin/systemctl enable systemd-networkd.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable systemd-networkd.socket

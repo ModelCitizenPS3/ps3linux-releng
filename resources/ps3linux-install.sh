@@ -90,7 +90,7 @@ mount -t ext4 $ROOT_PART /mnt/target
 rm -rf /mnt/target/*
 
 # Create root filesystem and mount virtual filesystems
-dnf -y --releasever=28 --forcearch=ppc64 --installroot=/mnt/target --repofrompath=ps3linux,http://www.ps3linux.net/ps3linux-repos/ppc64/ --nogpgcheck install filesystem
+dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=updates --disablerepo=updates-testing --installroot=/mnt/target --repofrompath=ps3linux,https://ps3linux.net/ps3linux-repos/ppc64/ --nogpgcheck install filesystem
 rm -f /mnt/target/dev/null
 mknod -m 600 /mnt/target/dev/console c 5 1
 mknod -m 666 /mnt/target/dev/null c 1 3
@@ -109,7 +109,8 @@ spufs /spu spufs defaults 0 0
 EOF
 
 # Install core package group, kernel packages, and any additional packages
-dnf -y --releasever=28 --forcearch=ppc64 --installroot=/mnt/target --repofrompath=ps3linux,http://www.ps3linux.net/ps3linux-repos/ppc64/ --nogpgcheck groupinstall core
+dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=updates --disablerepo=updates-testing --installroot=/mnt/target --repofrompath=ps3linux,https://ps3linux.net/ps3linux-repos/ppc64/ --nogpgcheck groupinstall core
+echo "export PS1='\[\e[01;31m\]\h\[\e[01;34m\] \w $\[\e[00m\] '" >> /mnt/target/root/.bashrc
 sed -i 's/enabled=1/enabled=0/g' /mnt/target/etc/yum.repos.d/fedora-updates.repo
 cp /root/ps3linux.repo /mnt/target/etc/yum.repos.d/ps3linux.repo
 cp -f /root/motd /mnt/target/etc/motd
@@ -118,7 +119,7 @@ cat > /mnt/target/etc/yaboot.conf << EOF
 boot=$BOOT_DEV
 partition=$PARTITION
 EOF
-chroot /mnt/target /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 install kernel kernel-headers bash-completion nfs-utils wpa_supplicant dnf-utils dosfstools tree sed man-db vim nano
+chroot /mnt/target /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=updates --disablerepo=updates-testing --enablerepo=ps3linux install kernel kernel-core kernel-modules kernel-headers bash-completion nfs-utils rsyslog wpa_supplicant dosfstools vim nano lynx
 sed -i "s|append=\"\"|append=\"video=ps3fb:mode:1669 root=$ROOT_PART selinux=0 audit=0\"|" /mnt/target/etc/yaboot.conf
 
 # Perform remaining configuration
