@@ -4,33 +4,57 @@ set -eo pipefail
 
 
 # Check if we have root privileges
-
-if (( EUID != 0 )); then
+if [ $(id -u) -ne 0 ]; then
     echo "Error: This script must be run as root." >&2
     exit 1
 fi
 
-
 # Set variables
-
-KVER="6.9.12"
 KEEP=0
+JOBS=1
+KERNEL_VERSION="6.9.12"
 KERNEL_BUILD_PATH="$(pwd)/PS3LINUX_x86_64_chroot"
 CHROOT_PATH="$(pwd)/PS3LINUX_ppc64_chroot"
 LIVE_ISO_PATH="$(pwd)/PS3LINUX_Live_ISO"
 INITRAMFS_PATH="$(pwd)/initramfs"
 RESOURCES_PATH="$(pwd)/resources"
 
+# Usage message
+usage() {
+   cat << EOF
+Usage: $0 [options]
+
+Options:
+    --jobs [number]     Number of jobs to do in parallel diring the kernel build
+                        Default is 1
+    --keep              Causes the script to not delete the subdirectories created during the build.
+                        The x86_64 chroot directory will be renamed as PS3LINUX_x86_64_chroot_kept.
+                        The ppc64 chroot directory will be renamed as PS3LINUX_ppc64_chroot_kept.
+                        Same goes for the initramfs and PS3LINUX_Live_ISO directories.
+    --help              Show this help
+
+EOF
+    exit 1
+}
 
 # Parse command line arguments
-
 for arg in "$@"; do
     case "$arg" in
         --keep)
             KEEP=1
+            shift 1
+            ;;
+        --jobs)
+            JOBS="$2"
+            shift 2
+            ;;
+        --help)
+            usage
+            exit 0
             ;;
         *)
-            echo "Unknown argument: $arg"
+            echo "Error. Unknown argument: $arg"
+            usage
             exit 1
             ;;
     esac
@@ -38,7 +62,6 @@ done
 
 
 # Check if subdirectories for build already exist
-
 if [ -d "$KERNEL_BUILD_PATH" ]; then
     echo "Error: Directory $KERNEL_BUILD_PATH exists. Please delete it." >&2
     exit 1
@@ -59,36 +82,56 @@ if [ -d "$LIVE_ISO_PATH" ]; then
     exit 1
 fi
 
-
-# Create a Fedora 28 (x86_64) chroot for kernel cross compilation. This is
-#   faster than compiling the kernel directly in a ppc64 chroot as it
-#   doesn't require running a ppc64 gcc toolchain through qemu
+echo ""
+echo -e "\033[0;31m#####################################################################################\033[0m"
+echo -e "\033[0;31m# Creating a Fedora 28 (x86_64) chroot for kernel cross compilation. This will be\033[0m"
+echo -e "\033[0;31m# faster than compiling the kernel directly in the ppc64 chroot we will create later.\033[0m"
+echo -e "\033[0;31m#####################################################################################\033[0m"
+echo ""
 
 mkdir -p "$KERNEL_BUILD_PATH"
+
+# Install root filesystem into chroot directory
 dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install filesystem
+
+# Delete empty file
 rm -f $KERNEL_BUILD_PATH/dev/null
+
+# Make some nodes in dev directory and mount virtual filesystems
 mknod -m 600 $KERNEL_BUILD_PATH/dev/console c 5 1
 mknod -m 666 $KERNEL_BUILD_PATH/dev/null c 1 3
-touch $KERNEL_BUILD_PATH/etc/fstab
 mount -t proc /proc $KERNEL_BUILD_PATH/proc
 mount -t sysfs /sys $KERNEL_BUILD_PATH/sys
 mount -o bind /dev $KERNEL_BUILD_PATH/dev
 mount -o bind /dev/pts $KERNEL_BUILD_PATH/dev/pts
 mount -t tmpfs tmpfs $KERNEL_BUILD_PATH/run
 mount -t tmpfs tmpfs $KERNEL_BUILD_PATH/tmp
+
+# Some packages look for this file
+touch $KERNEL_BUILD_PATH/etc/fstab
+
+# Install dnf package manager into chroot directory
 dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install dnf
+
+# Configure package repos and configure network for chroot
 sed -i 's/enabled=1/enabled=0/g' $KERNEL_BUILD_PATH/etc/yum.repos.d/fedora-updates.repo
 echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
+
+# Install kernel build dependencies inside chroot directory
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 install filesystem dnf perl-interpreter binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel gcc-powerpc64-linux-gnu binutils-powerpc64-linux-gnu xz findutils kmod
-chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-$KVER.tar.xz
-chroot $KERNEL_BUILD_PATH /usr/bin/tar -xf linux-$KVER.tar.xz
+
+# Cross compile kernel inside our x86_64 chroot
+chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-$KERNEL_VERSION.tar.xz
+chroot $KERNEL_BUILD_PATH /usr/bin/tar -xf linux-$KERNEL_VERSION.tar.xz
 cp -f $RESOURCES_PATH/0010-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
-cp -f $RESOURCES_PATH/config-$KVER-live $KERNEL_BUILD_PATH/linux-$KVER/.config
-chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-$KVER -p1 -i /0010-ps3stor-multiple-regions.patch
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KVER olddefconfig
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KVER -j4 zImage modules
-chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KVER modules_install
-rm -f $KERNEL_BUILD_PATH/lib/modules/$KVER/build
+cp -f $RESOURCES_PATH/config-$KERNEL_VERSION-live $KERNEL_BUILD_PATH/linux-$KERNEL_VERSION/.config
+chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-$KERNEL_VERSION -p1 -i /0010-ps3stor-multiple-regions.patch
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KERNEL_VERSION olddefconfig
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KERNEL_VERSION -j$JOBS zImage modules
+chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KERNEL_VERSION modules_install
+rm -f $KERNEL_BUILD_PATH/lib/modules/$KERNEL_VERSION/build
+
+# Unmount virtual filesysteme from our x86_64 chroot
 umount $KERNEL_BUILD_PATH/tmp
 umount $KERNEL_BUILD_PATH/run
 umount $KERNEL_BUILD_PATH/dev/pts
@@ -96,34 +139,64 @@ umount $KERNEL_BUILD_PATH/dev
 umount $KERNEL_BUILD_PATH/sys
 umount $KERNEL_BUILD_PATH/proc
 
-
-# Create and configure a Fedora 28 (ppc64) chroot. The contents of this chroot
-#   will becone the root file system of our finished live ISO image.
+echo ""
+echo -e "\033[0;31m##############################################################################\033[0m"
+echo -e "\033[0;31m# Create and configure a Fedora 28 (ppc64) chroot. The contents of this chroot\033[0m"
+echo -e "\033[0;31m# will becone the root file system of our live ISO image.\033[0m"
+echo -e "\033[0;31m##############################################################################\033[0m"
+echo ""
 
 mkdir -p "$CHROOT_PATH"
+
+# Install root filesystem into chroot directory
 dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager,audit,firewalld install filesystem
+
+# Delete empty file
 rm -f $CHROOT_PATH/dev/null
+
+# Make some nodes in dev directory and mount virtual filesystems
 mknod -m 600 $CHROOT_PATH/dev/console c 5 1
 mknod -m 666 $CHROOT_PATH/dev/null c 1 3
-touch $CHROOT_PATH/etc/fstab
 mount -t proc /proc $CHROOT_PATH/proc
 mount -t sysfs /sys $CHROOT_PATH/sys
 mount -o bind /dev $CHROOT_PATH/dev
 mount -o bind /dev/pts $CHROOT_PATH/dev/pts
 mount -t tmpfs tmpfs $CHROOT_PATH/run
 mount -t tmpfs tmpfs $CHROOT_PATH/tmp
+
+# Some packages look for this file 
+touch $CHROOT_PATH/etc/fstab
+
+# Install dnf package manager into chroot directory
 dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager,audit,firewalld install dnf
+
+# Configure package repos and configure network for chroot
 sed -i 's/enabled=1/enabled=0/g' $CHROOT_PATH/etc/yum.repos.d/fedora-updates.repo
-echo "ps3linux" > $CHROOT_PATH/etc/hostname
 echo "nameserver 8.8.8.8" > $CHROOT_PATH/etc/resolv.conf
+
+# Install "core" dnf package group inside chroot directory
 chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld groupinstall core
+
+# Install additional packages we want to have available in our live image
 chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld install udisks2-zram bash-completion wget wpa_supplicant nano lynx dosfstools nfs-utils rsyslog
+
+# Additional configurations for the live ISO
 chroot $CHROOT_PATH /usr/bin/dnf clean all
-echo "export PS1='\[\e[01;31m\]\h\[\e[01;34m\] \w $\[\e[00m\] '" >> $CHROOT_PATH/root/.bashrc
+echo "ps3linux" > $CHROOT_PATH/etc/hostname
+cp $RESOURCES_PATH/ps3linux.repo $CHROOT_PATH/root/ps3linux.repo
+cat >> $CHROOT_PATH/root/.bashrc << EOF
+
+alias ll='ls -lh --color=auto'
+alias lla='ls -lah --color=auto'
+alias grep='grep --color=always'
+
+export PS1='\[\e[01;31m\]\h\[\e[01;34m\] \w $\[\e[00m\] '
+editor=vi
+EOF
 rm -f $CHROOT_PATH/etc/yum.repos.d/*.rpmnew
 mv -f $CHROOT_PATH/etc/nsswitch.conf $CHROOT_PATH/etc/nsswitch.conf.orig
 mv -f $CHROOT_PATH/etc/nsswitch.conf.rpmnew $CHROOT_PATH/etc/nsswitch.conf
-cp -rf $KERNEL_BUILD_PATH/lib/modules/$KVER $CHROOT_PATH/lib/modules/
+cp -rf $KERNEL_BUILD_PATH/lib/modules/$KERNEL_VERSION $CHROOT_PATH/lib/modules/
 echo "ps3vram" > $CHROOT_PATH/etc/modules-load.d/ps3vram.conf
 echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="/sbin/swapon -p 200 /dev/ps3vram"' > $CHROOT_PATH/etc/udev/rules.d/10-ps3vram.rules
 chmod 0200 $CHROOT_PATH/etc/shadow
@@ -137,25 +210,19 @@ Name=eth0
 [Network]
 DHCP=yes
 EOF
-cat > $CHROOT_PATH/etc/systemd/network/20-wlan0.network << EOF
-[Match]
-Name=wlan0
-
-[Network]
-DHCP=yes
-EOF
 mkdir $CHROOT_PATH/mnt/target
 cp $RESOURCES_PATH/zram-swap.sh $CHROOT_PATH/usr/sbin/zram-swap.sh
 cp $RESOURCES_PATH/zram-swap.service $CHROOT_PATH/etc/systemd/system/zram-swap.service
 cp $RESOURCES_PATH/ps3linux-install.sh $CHROOT_PATH/usr/sbin/ps3linux-install.sh
-cp $RESOURCES_PATH/ps3linux.repo $CHROOT_PATH/root/ps3linux.repo
 cp $RESOURCES_PATH/motd $CHROOT_PATH/root/motd
 cp -f $RESOURCES_PATH/motd $CHROOT_PATH/etc/motd
 cat >> $CHROOT_PATH/etc/motd << EOF
 
-ACHTUNG: Run "ps3linux-install.sh --help"
+Run "ps3linux-install.sh --help" for install script usage info.
 
 EOF
+
+# Configure autologin and systemd services
 mkdir -p $CHROOT_PATH/etc/systemd/system/getty@tty1.service.d
 cat > $CHROOT_PATH/etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
 [Service]
@@ -172,6 +239,8 @@ chroot $CHROOT_PATH /usr/bin/systemctl disable dnf-makecache.timer
 chroot $CHROOT_PATH /usr/bin/systemctl enable systemd-networkd.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable systemd-networkd.socket
 chroot $CHROOT_PATH /usr/bin/systemctl enable zram-swap.service
+
+# Unmount virtual filesysteme from our ppc64 chroot
 umount $CHROOT_PATH/tmp
 umount $CHROOT_PATH/run
 umount $CHROOT_PATH/dev/pts
@@ -181,12 +250,16 @@ umount $CHROOT_PATH/proc
 rm -rf $CHROOT_PATH/usr/share/doc
 rm -rf $CHROOT_PATH/usr/share/man
 rm -rf $CHROOT_PATH/lib/firmware/*
+
+# Strip all binary and library files and delete all static libs
 find $CHROOT_PATH -type f \( -perm -111 -o -name '*.so*' -o -name '*.ko' \) -exec file {} \; | grep 'ELF' | cut -d: -f1 | while read f; do echo "Stripping $f"; powerpc64-linux-gnu-strip --strip-unneeded "$f" || true; done
 find $CHROOT_PATH/usr/lib64 -name '*.a' -delete
 
-
-# Create simple initramfs image to handle mounting of virtual filesystems and
-#   switching roots to an overlayfs root directory
+echo ""
+echo -e "\033[0;31m################################################################################\033[0m"
+echo -e "\033[0;31m# Creating a basic initramfs image to handle mounting overlayfs for live session\033[0m"
+echo -e "\033[0;31m################################################################################\033[0m"
+echo ""
 
 mkdir -p $INITRAMFS_PATH/{dev,iso,lower,mnt,proc,run,sys,sysroot/{dev,proc,run,sys,tmp},tmp,usr/{bin,lib,lib64,sbin},upper/{upper,work}}
 pushd $INITRAMFS_PATH
@@ -198,7 +271,7 @@ popd
 mkdir -p $INITRAMFS_PATH/lib/modules
 mknod -m 600 $INITRAMFS_PATH/dev/console c 5 1
 mknod -m 666 $INITRAMFS_PATH/dev/null c 1 3
-cp -rf $KERNEL_BUILD_PATH/lib/modules/$KVER $INITRAMFS_PATH/lib/modules/
+cp -rf $KERNEL_BUILD_PATH/lib/modules/$KERNEL_VERSION $INITRAMFS_PATH/lib/modules/
 cp -f $RESOURCES_PATH/init $INITRAMFS_PATH/init
 cp $CHROOT_PATH/usr/bin/mount $INITRAMFS_PATH/usr/bin/mount
 cp $CHROOT_PATH/usr/bin/sleep $INITRAMFS_PATH/usr/bin/sleep
@@ -234,21 +307,22 @@ ln -s libtinfo.so.6.1 libtinfo.so.6
 ln -s ld-2.27.so ld-linux-x86-64.so.2
 popd
 
-
-# Create and populate a directory and convert it to our final LIVE ISO image
+echo ""
+echo -e "\033[0;31m###############################################################################\033[0m"
+echo -e "\033[0;31m# Creating and populating directory to be converted to our final live ISO image\033[0m"
+echo -e "\033[0;31m###############################################################################\033[0m"
+echo ""
 
 mkdir -p $LIVE_ISO_PATH/{boot,etc,LiveOS}
 pushd $INITRAMFS_PATH
 find . | cpio -H newc -o | gzip > $LIVE_ISO_PATH/boot/initramfs.img
 popd
-cp -f $KERNEL_BUILD_PATH/linux-$KVER/arch/powerpc/boot/zImage $LIVE_ISO_PATH/boot/vmlinuz
+cp -f $KERNEL_BUILD_PATH/linux-$KERNEL_VERSION/arch/powerpc/boot/zImage $LIVE_ISO_PATH/boot/vmlinuz
 cp -f $RESOURCES_PATH/yaboot.conf $LIVE_ISO_PATH/etc/yaboot.conf
 mksquashfs $CHROOT_PATH $LIVE_ISO_PATH/LiveOS/liveroot.img -comp xz -b 1M -Xdict-size 100% -noappend
 mkisofs -r -J -V PS3LIVE -o PS3LINUX_Live_ISO.iso $LIVE_ISO_PATH
 
-
-# Clean up (delete or rename subdirectories used during build)
-
+# Remove directoies used during the build (unless the --keep argument was passed to the script)
 if [[ "$KEEP" -eq 1 ]]; then
     mv -f "$KERNEL_BUILD_PATH" "${KERNEL_BUILD_PATH}_kept"
     mv -f "$CHROOT_PATH" "${CHROOT_PATH}_kept"
@@ -259,6 +333,6 @@ else
 fi
 
 echo ""
-echo "Done. Live ISO root password is HACKTHEPLANET. Enjoy!"
+echo -e "\033[0;31mDone. Live ISO image is PS3LINUX_Live_ISO..iso. Live ISO root password is HACKTHEPLANET. Enjoy.\033[0m"
 echo ""
 

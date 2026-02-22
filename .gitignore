@@ -1,0 +1,5 @@
+PS3LINUX_Live_ISO.iso
+initramfs_kept/
+PS3LINUX_Live_ISO_kept/
+PS3LINUX_ppc64_chroot_kept/
+PS3LINUX_x86_64_chroot_kept/

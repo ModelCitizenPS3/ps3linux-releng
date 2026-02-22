@@ -83,13 +83,13 @@ echo ""
 mkswap $SWAP_PART
 swapon -p 50 $SWAP_PART
 
-# Format and mount root partition
+# Format and mount target root partition
 echo "Formatting root partition as ext4. Select y to continue."
 mkfs -t ext4 $ROOT_PART
 mount -t ext4 $ROOT_PART /mnt/target
 rm -rf /mnt/target/*
 
-# Create root filesystem and mount virtual filesystems
+# Install root filesystem and mount virtual filesystems
 dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=updates --disablerepo=updates-testing --installroot=/mnt/target --repofrompath=ps3linux,https://ps3linux.net/ps3linux-repos/ppc64/ --nogpgcheck install filesystem
 rm -f /mnt/target/dev/null
 mknod -m 600 /mnt/target/dev/console c 5 1
@@ -130,13 +130,6 @@ echo "ps3vram" > /mnt/target/etc/modules-load.d/ps3vram.conf
 cat > /mnt/target/etc/systemd/network/10-eth0.network << EOF
 [Match]
 Name=eth0
-
-[Network]
-DHCP=yes
-EOF
-cat > /mnt/target/etc/systemd/network/20-wlan0.network << EOF
-[Match]
-Name=wlan0
 
 [Network]
 DHCP=yes
