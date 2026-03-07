@@ -25,7 +25,7 @@ usage() {
 Usage: $0 [options]
 
 Options:
-    --jobs [number]     Number of jobs to do in parallel diring the kernel build
+    --jobs [number]     Number of jobs to do in parallel during the kernel build
                         Default is 1
     --keep              Causes the script to not delete the subdirectories created during the build.
                         The x86_64 chroot directory will be renamed as PS3LINUX_x86_64_chroot_kept.
@@ -190,8 +190,9 @@ alias ll='ls -lh --color=auto'
 alias lla='ls -lah --color=auto'
 alias grep='grep --color=always'
 
-export PS1='\[\e[01;31m\]\h\[\e[01;34m\] \w $\[\e[00m\] '
-editor=vi
+PS1='\[\e[01;31m\]\h\[\e[01;34m\] \w $\[\e[00m\] '
+EDITOR=vi
+export PS1 EDITOR
 EOF
 rm -f $CHROOT_PATH/etc/yum.repos.d/*.rpmnew
 mv -f $CHROOT_PATH/etc/nsswitch.conf $CHROOT_PATH/etc/nsswitch.conf.orig
