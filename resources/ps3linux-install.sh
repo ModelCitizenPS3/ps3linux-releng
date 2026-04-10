@@ -2,6 +2,12 @@
 
 set -eo pipefail
 
+# Variables
+BOOT_DEV=""
+ROOT_PART=""
+SWAP_PART=""
+HOST_NAME="localhost"
+
 # Check if we have root privileges
 if [ $(id -u) -ne 0 ]; then
     echo "Error: This script must be run as root." >&2
@@ -16,16 +22,18 @@ Usage: $0 <OPTIONS>
 
 OPTIONS:
   --boot <DEVICE>       PS3's hard disk device (HDD) name (as seen by petitboot)
-			use /dev/ps3da if PS3 is downgraded (on Firmware <= 3.15)
+                        use /dev/ps3da if PS3 is downgraded (on Firmware <= 3.15)
                         use /dev/ps3dd if PS3 is on CFW like Rebug or Evilnat
 
   --root <PARTITION>    HDD partition number where PS3 LINUX will be installed
 
   --swap <PARTITION>    HDD partition number to be used as system swap device
 
+  --hostname <HOSTNAME> Hostname for the PS3LINUX system
+
   --help                show this help
 
-EXAMPLE: ps3linux-install.sh --boot /dev/ps3da --root 2 --swap 1
+EXAMPLE: ps3linux-install.sh --boot /dev/ps3da --root 2 --swap 1 --hostname localhost
 
 NOTE: This script should only be run after your PS3's HDD has been partitioned
       and contains at least one root partition and one swap partition. You can
@@ -36,12 +44,7 @@ Suggested layout: Name          Type         Size
                   /dev/ps3dd2   Linux        remainder of drive
 
 EOF
-    exit 1
 }
-
-BOOT_DEV=""
-ROOT_PART=""
-SWAP_PART=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -58,14 +61,18 @@ while [[ $# -gt 0 ]]; do
             SWAP_PART="$2"
             shift 2
             ;;
+        --hostname)
+            HOST_NAME="$2"
+            shift 2
+            ;;
         --help|-h)
             usage
-	    exit 0
+            exit 0
             ;;
         *)
             echo "Unknown option: $1" >&2
             usage
-	    exit 1
+            exit 1
             ;;
     esac
 done
@@ -106,13 +113,17 @@ mkswap /dev/ps3dd$SWAP_PART
 swapon -p 50 /dev/ps3dd$SWAP_PART
 
 # Format and mount target root partition
-echo "Formatting root partition as ext4. Select y to continue."
 mkfs -t ext4 /dev/ps3dd$ROOT_PART
 mount -t ext4 /dev/ps3dd$ROOT_PART /mnt/target
 rm -rf /mnt/target/*
 
-# Install root filesystem and mount virtual filesystems
-dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=updates --disablerepo=updates-testing --installroot=/mnt/target --repofrompath=ps3linux,https://ps3linux.net/ps3linux-repos/ppc64/ --nogpgcheck install filesystem
+echo "Building dnf metadata cache. This can take several minutes..."
+echo ""
+
+# Install root file system
+dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --repofrompath=ps3linux,https://ps3linux.net/ps3linux-repos/1/ppc64/ --installroot=/mnt/target --exclude=fedora-release,generic-release --nogpgcheck install filesystem ps3linux-release
+
+# Mount virtual file systems
 rm -f /mnt/target/dev/null
 mknod -m 600 /mnt/target/dev/console c 5 1
 mknod -m 666 /mnt/target/dev/null c 1 3
@@ -123,32 +134,56 @@ mount -o bind /dev/pts /mnt/target/dev/pts
 mount -t tmpfs tmpfs /mnt/target/run
 mount -t tmpfs tmpfs /mnt/target/tmp
 
-# Create fstab, configure dnf repos, create yaboot.conf
+# Create fstab and enable network in chroot
 cat > /mnt/target/etc/fstab << EOF
 /dev/ps3dd$ROOT_PART / ext4 noatime 0 1
-/dev/ps3dd$SWAP_PART swap swap pri=1 0 0
+/dev/ps3dd$SWAP_PART none swap pri=1 0 0
 spufs /spu spufs defaults 0 0
 EOF
+echo "nameserver 8.8.8.8" > /mnt/target/etc/resolv.conf
 
 # Install core package group
-dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=updates --disablerepo=updates-testing --installroot=/mnt/target --repofrompath=ps3linux,https://ps3linux.net/ps3linux-repos/ppc64/ --nogpgcheck groupinstall core
-echo "export PS1='\[\e[01;31m\]\h\[\e[01;34m\] \w $\[\e[00m\] '" >> /mnt/target/root/.bashrc
-sed -i 's/enabled=1/enabled=0/g' /mnt/target/etc/yum.repos.d/fedora-updates.repo
-cp /root/ps3linux.repo /mnt/target/etc/yum.repos.d/ps3linux.repo
-cp -f /root/motd /mnt/target/etc/motd
-echo "nameserver 8.8.8.8" > /mnt/target/etc/resolv.conf
+dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=ps3linux --installroot=/mnt/target --nogpgcheck groupinstall core
+
+# Prepare bootloader config file
 cat > /mnt/target/etc/yaboot.conf << EOF
 boot=$BOOT_DEV
 partition=$ROOT_PART
 EOF
-chroot /mnt/target /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=updates --disablerepo=updates-testing --enablerepo=ps3linux install kernel kernel-core kernel-modules kernel-headers bash-completion nfs-utils rsyslog wpa_supplicant dosfstools vim nano lynx
+
+# Install kernel and additional packages and clear dnf cache
+dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=ps3linux --installroot=/mnt/target --nogpgcheck install kernel kernel-core kernel-modules kernel-headers bash-completion nfs-utils wpa_supplicant dosfstools vim nano
+dnf --installroot=/mnt/target clean all
+
+# Complete bootloader config file yaboot.conf
 sed -i "s|append=\"\"|append=\"video=ps3fb:mode:1669 root=/dev/ps3dd$ROOT_PART selinux=0 audit=0\"|" /mnt/target/etc/yaboot.conf
 
-# Perform remaining configuration
+# Set hostname
+echo "$HOST_NAME" > /mnt/target/etc/hostname
+
+# Configure root's bashrc file
+cat >> /mnt/target/root/.bashrc << EOF
+
+alias ll='ls -lh --color=auto'
+alias lla='ls -lah --color=auto'
+alias grep='grep --color=always'
+
+PS1='\[\e[01;31m\]\h\[\e[01;34m\] \w $\[\e[00m\] '
+EDITOR=vim
+export PS1 EDITOR
+EOF
+
+# Disable selinux in selinux config
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /mnt/target/etc/selinux/config
-echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="/sbin/swapon -p 2 /dev/ps3vram"' > /mnt/target/etc/udev/rules.d/10-ps3vram.rules
-echo "vm.swappiness = 10" >> /mnt/target/etc/sysctl.conf
+
+# Enable ps3vram swap
 echo "ps3vram" > /mnt/target/etc/modules-load.d/ps3vram.conf
+echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="/sbin/swapon -p 2 /dev/ps3vram"' > /mnt/target/etc/udev/rules.d/10-ps3vram.rules
+
+# Set swappiness
+echo "vm.swappiness = 10" >> /mnt/target/etc/sysctl.conf
+
+# Configure eth0 for systemd networking
 cat > /mnt/target/etc/systemd/network/10-eth0.network << EOF
 [Match]
 Name=eth0
@@ -156,6 +191,8 @@ Name=eth0
 [Network]
 DHCP=yes
 EOF
+
+# Set systemd services
 chroot /mnt/target /usr/bin/systemctl set-default multi-user.target
 chroot /mnt/target /usr/bin/systemctl disable auditd.service
 chroot /mnt/target /usr/bin/systemctl disable NetworkManager.service
@@ -165,7 +202,11 @@ chroot /mnt/target /usr/bin/systemctl disable firewalld.service
 chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
 chroot /mnt/target /usr/bin/systemctl enable systemd-networkd.service
 chroot /mnt/target /usr/bin/systemctl disable systemd-networkd.socket
+
+# Configure root password
+echo ""
 echo "Set a root password."
+echo ""
 chroot /mnt/target /usr/bin/passwd root
 
 # Unmount filesystems
@@ -176,8 +217,14 @@ umount /mnt/target/dev
 umount /mnt/target/sys
 umount /mnt/target/proc
 umount /mnt/target
+
+# Deactivate HDD swap
+swapoff /dev/ps3dd$SWAP_PART
+
 echo ""
 echo "PS3LINUX install complete."
 echo "You may reboot your Playstation 3."
 echo ""
+
+exit 0
 
