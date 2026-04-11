@@ -1,0 +1,10 @@
+[ps3linux]
+name=PS3LINUX 1 - ppc64
+failovermethod=priority
+baseurl=https://ps3linux.net/ps3linux-repos/1/ppc64/
+enabled=1
+repo_gpgcheck=0
+type=rpm
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-ps3linux-1-primary
+skip_if_unavailable=False

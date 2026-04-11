@@ -121,7 +121,7 @@ echo "Building dnf metadata cache. This can take several minutes..."
 echo ""
 
 # Install root file system
-dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --repofrompath=ps3linux,https://ps3linux.net/ps3linux-repos/1/ppc64/ --installroot=/mnt/target --exclude=fedora-release,generic-release --nogpgcheck install filesystem ps3linux-release
+dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=ps3linux --installroot=/mnt/target --exclude=fedora-release,generic-release install filesystem ps3linux-release
 
 # Mount virtual file systems
 rm -f /mnt/target/dev/null
@@ -143,7 +143,7 @@ EOF
 echo "nameserver 8.8.8.8" > /mnt/target/etc/resolv.conf
 
 # Install core package group
-dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=ps3linux --installroot=/mnt/target --nogpgcheck groupinstall core
+dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=ps3linux --installroot=/mnt/target groupinstall core
 
 # Prepare bootloader config file
 cat > /mnt/target/etc/yaboot.conf << EOF
@@ -152,7 +152,7 @@ partition=$ROOT_PART
 EOF
 
 # Install kernel and additional packages and clear dnf cache
-dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=ps3linux --installroot=/mnt/target --nogpgcheck install kernel kernel-core kernel-modules kernel-headers bash-completion nfs-utils wpa_supplicant dosfstools vim nano
+dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=ps3linux --installroot=/mnt/target install kernel kernel-core kernel-modules kernel-headers bash-completion nfs-utils wpa_supplicant dosfstools vim nano
 dnf --installroot=/mnt/target clean all
 
 # Complete bootloader config file yaboot.conf

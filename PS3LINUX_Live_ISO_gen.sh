@@ -127,6 +127,7 @@ umount $KERNEL_BUILD_PATH/dev
 umount $KERNEL_BUILD_PATH/sys
 umount $KERNEL_BUILD_PATH/proc
 
+# Now we will create & configure a Fedora 28 (ppc64) chroot which will become our live ISO root filesystem
 mkdir -p "$CHROOT_PATH"
 
 # Install root filesystem into chroot directory
@@ -200,6 +201,8 @@ cat >> $CHROOT_PATH/etc/motd << EOF
 Run "ps3linux-install.sh --help" for install script info.
 
 EOF
+cp -f $RESOURCES_PATH/RPM-GPG-KEY-ps3linux-1-primary $CHROOT_PATH/etc/pki/rpm-gpg/RPM-GPG-KEY-ps3linux-1-primary
+cp -f $RESOURCES_PATH/ps3linux.repo $CHROOT_PATH/etc/yum.repos.d/ps3linux.repo
 
 # Configure autologin and systemd services
 mkdir -p $CHROOT_PATH/etc/systemd/system/getty@tty1.service.d
