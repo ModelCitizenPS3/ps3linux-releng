@@ -109,7 +109,7 @@ echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 install perl-interpreter binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel gcc-powerpc64-linux-gnu binutils-powerpc64-linux-gnu xz findutils kmod
 
 # Cross compile kernel inside our x86_64 chroot
-chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-$KERNEL_VERSION.tar.xz
+chroot $KERNEL_BUILD_PATH /usr/bin/wget -4 https://www.kernel.org/pub/linux/kernel/v6.x/linux-$KERNEL_VERSION.tar.xz
 chroot $KERNEL_BUILD_PATH /usr/bin/tar -xf linux-$KERNEL_VERSION.tar.xz
 cp -f $RESOURCES_PATH/0011-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
 cp -f $RESOURCES_PATH/config-$KERNEL_VERSION-live $KERNEL_BUILD_PATH/linux-$KERNEL_VERSION/.config
@@ -160,7 +160,7 @@ echo "nameserver 8.8.8.8" > $CHROOT_PATH/etc/resolv.conf
 chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld groupinstall core
 
 # Install additional packages we want to have available in our live image
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld install udisks2-zram bash-completion wget wpa_supplicant nano lynx
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld install udisks2-zram bash-completion wget wpa_supplicant nano lynx chrony
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 
 # Additional configurations for the live ISO
@@ -212,6 +212,7 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
 EOF
 chroot $CHROOT_PATH /usr/bin/systemctl set-default multi-user.target
+chroot $CHROOT_PATH /usr/bin/systemctl disable sssd.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-readonly.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-import-state.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable mdmonitor.service
@@ -221,6 +222,7 @@ chroot $CHROOT_PATH /usr/bin/systemctl disable dnf-makecache.timer
 chroot $CHROOT_PATH /usr/bin/systemctl enable systemd-networkd.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable systemd-networkd.socket
 chroot $CHROOT_PATH /usr/bin/systemctl enable zram-swap.service
+chroot $CHROOT_PATH /usr/bin/systemctl enable chronyd.service
 
 # Unmount virtual filesystems from our ppc64 chroot
 umount $CHROOT_PATH/tmp
@@ -302,7 +304,6 @@ else
     rm -rf $KERNEL_BUILD_PATH $CHROOT_PATH $INITRAMFS_PATH $LIVE_ISO_PATH
 fi
 
-echo ""
 echo "Done. Live ISO image is PS3LINUX_Live_ISO.iso. Live ISO root password is HACKTHEPLANET. Happy hacking!"
 echo ""
 
