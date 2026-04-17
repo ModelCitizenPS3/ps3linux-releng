@@ -102,7 +102,7 @@ touch $KERNEL_BUILD_PATH/etc/fstab
 dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install dnf
 
 # Configure package repos and configure network for chroot
-sed -i 's/enabled=1/enabled=0/g' $KERNEL_BUILD_PATH/etc/yum.repos.d/fedora-updates.repo
+rm -f $KERNEL_BUILD_PATH/etc/yum.repos.d/fedora-*
 echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
 
 # Install kernel build dependencies inside chroot directory
@@ -163,8 +163,9 @@ chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=i
 chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld install udisks2-zram bash-completion wget wpa_supplicant nano lynx chrony
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 
-# Additional configurations for the live ISO
+# Additional configurations for the live session
 echo "ps3linux" > $CHROOT_PATH/etc/hostname
+rm -f $CHROOT_PATH/etc/nsswitch.conf.rpmnew
 cp -f $RESOURCES_PATH/motd $CHROOT_PATH/etc/motd
 cat >> $CHROOT_PATH/root/.bashrc << EOF
 
@@ -177,8 +178,6 @@ EDITOR=vi
 export PS1 EDITOR
 EOF
 rm -f $CHROOT_PATH/etc/yum.repos.d/*.rpmnew
-mv -f $CHROOT_PATH/etc/nsswitch.conf $CHROOT_PATH/etc/nsswitch.conf.orig
-mv -f $CHROOT_PATH/etc/nsswitch.conf.rpmnew $CHROOT_PATH/etc/nsswitch.conf
 cp -rf $KERNEL_BUILD_PATH/lib/modules/$KERNEL_VERSION $CHROOT_PATH/lib/modules/
 echo "ps3vram" > $CHROOT_PATH/etc/modules-load.d/ps3vram.conf
 echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="/sbin/swapon -p 200 /dev/ps3vram"' > $CHROOT_PATH/etc/udev/rules.d/10-ps3vram.rules
@@ -204,25 +203,25 @@ EOF
 cp -f $RESOURCES_PATH/RPM-GPG-KEY-ps3linux-1-primary $CHROOT_PATH/etc/pki/rpm-gpg/RPM-GPG-KEY-ps3linux-1-primary
 cp -f $RESOURCES_PATH/ps3linux.repo $CHROOT_PATH/etc/yum.repos.d/ps3linux.repo
 
-# Configure autologin and systemd services
+# Configure autologin
 mkdir -p $CHROOT_PATH/etc/systemd/system/getty@tty1.service.d
 cat > $CHROOT_PATH/etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
 EOF
+
+# Set live session systemd services
 chroot $CHROOT_PATH /usr/bin/systemctl set-default multi-user.target
-chroot $CHROOT_PATH /usr/bin/systemctl disable sssd.service
+chroot $CHROOT_PATH /usr/bin/systemctl enable systemd-networkd.service
+chroot $CHROOT_PATH /usr/bin/systemctl enable zram-swap.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable systemd-networkd.socket
+chroot $CHROOT_PATH /usr/bin/systemctl disable dnf-makecache.timer
 chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-readonly.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-import-state.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable mdmonitor.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable multipathd.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable wpa_supplicant.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable dnf-makecache.timer
-chroot $CHROOT_PATH /usr/bin/systemctl enable systemd-networkd.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable systemd-networkd.socket
-chroot $CHROOT_PATH /usr/bin/systemctl enable zram-swap.service
-chroot $CHROOT_PATH /usr/bin/systemctl enable chronyd.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable sssd-secrets.socket
+chroot $CHROOT_PATH /usr/bin/systemctl disable sssd.service
 
 # Unmount virtual filesystems from our ppc64 chroot
 umount $CHROOT_PATH/tmp

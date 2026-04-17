@@ -21,23 +21,23 @@ usage() {
 Usage: $0 <OPTIONS>
 
 OPTIONS:
-  --boot <DEVICE>       PS3's hard disk device (HDD) name (as seen by petitboot)
-                        use /dev/ps3da if PS3 is downgraded (on Firmware <= 3.15)
-                        use /dev/ps3dd if PS3 is on CFW like Rebug or Evilnat
+  --boot <DEVICE>           PS3's hard disk device (HDD) name (as seen by petitboot)
+                            use /dev/ps3da if PS3 is downgraded (on Firmware <= 3.15)
+                            use /dev/ps3dd if PS3 is on CFW like Rebug or Evilnat
 
-  --root <PARTITION>    HDD partition number where PS3 LINUX will be installed
+  --root <PARTITION>        partition number where PS3 LINUX will be installed
 
-  --swap <PARTITION>    HDD partition number to be used as system swap device
+  --swap <PARTITION>        partition number to be used as as swap
 
-  --hostname <HOSTNAME> Hostname for the PS3LINUX system
+  --hostname <HOSTNAME>     hostname for your PS3LINUX installation
 
-  --help                show this help
+  --help                    show this help
 
 EXAMPLE: ps3linux-install.sh --boot /dev/ps3da --root 2 --swap 1 --hostname localhost
 
 NOTE: This script should only be run after your PS3's HDD has been partitioned
-      and contains at least one root partition and one swap partition. You can
-      partition the drive by running fdisk /dev/ps3dd from the command line.
+      and contains at least one root partition. You can partition the drive by
+      running fdisk /dev/ps3dd
     
 Suggested layout: Name          Type         Size
                   /dev/ps3dd1   Linux Swap   2 GiB (2048 MiB)
@@ -88,11 +88,6 @@ if [ -z $ROOT_PART ]; then
 	usage
 	exit 1
 fi
-if [ -z $SWAP_PART ]; then
-	echo "Error: No swap partition provided."
-	usage
-	exit 1
-fi
 
 # Make sure user provided block devices exist
 if [ ! -b /dev/ps3dd ]; then
@@ -103,14 +98,22 @@ if [ ! -b /dev/ps3dd$ROOT_PART ]; then
 	echo "Error: Could not find root partition /dev/ps3dd$ROOT_PART. You must partition your PS3 HDD's Linux region before running this script."
 	exit 1
 fi
-if [ ! -b /dev/ps3dd$SWAP_PART ]; then
-	echo "Error: Could not find swap partition /dev/ps3dd$SWAP_PART. You must partition your PS3 HDD's Linux region before running this script."
-	exit 1
+if [ ! -z $SWAP_PART ]; then
+    if [ ! -b /dev/ps3dd$SWAP_PART ]; then
+	    echo "Error: Could not find swap partition /dev/ps3dd$SWAP_PART. You must partition your PS3 HDD's Linux region before running this script."
+	    exit 1
+    fi
 fi
 
 # Activate HDD swap partition
-mkswap /dev/ps3dd$SWAP_PART
-swapon -p 50 /dev/ps3dd$SWAP_PART
+if [ ! -z $SWAP_PART ]; then
+    mkswap /dev/ps3dd$SWAP_PART
+    swapon -p 50 /dev/ps3dd$SWAP_PART
+fi
+
+echo ""
+echo "Ready to format root device /dev/ps3dd$ROOT_PART - Enter y to continue."
+echo ""
 
 # Format and mount target root partition
 mkfs -t ext4 /dev/ps3dd$ROOT_PART
@@ -152,7 +155,7 @@ partition=$ROOT_PART
 EOF
 
 # Install kernel and additional packages and clear dnf cache
-dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=ps3linux --installroot=/mnt/target install kernel kernel-core kernel-modules kernel-headers bash-completion nfs-utils wpa_supplicant dosfstools vim nano
+dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=ps3linux --installroot=/mnt/target install kernel kernel-core kernel-modules kernel-headers chrony bash-completion nfs-utils wpa_supplicant dosfstools vim nano
 dnf --installroot=/mnt/target clean all
 
 # Complete bootloader config file yaboot.conf
@@ -173,7 +176,7 @@ EDITOR=vim
 export PS1 EDITOR
 EOF
 
-# Disable selinux in selinux config
+# Disable selinux
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /mnt/target/etc/selinux/config
 
 # Enable ps3vram swap
@@ -183,7 +186,7 @@ echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="
 # Set swappiness
 echo "vm.swappiness = 10" >> /mnt/target/etc/sysctl.conf
 
-# Configure eth0 for systemd networking
+# Configure eth0 and wlan0 for systemd networking
 cat > /mnt/target/etc/systemd/network/10-eth0.network << EOF
 [Match]
 Name=eth0
@@ -192,18 +195,16 @@ Name=eth0
 DHCP=yes
 EOF
 
-# Set systemd services
+# Set initial systemd services
 chroot /mnt/target /usr/bin/systemctl set-default multi-user.target
-chroot /mnt/target /usr/bin/systemctl disable auditd.service
-chroot /mnt/target /usr/bin/systemctl disable NetworkManager.service
-chroot /mnt/target /usr/bin/systemctl disable NetworkManager-wait-online.service
-chroot /mnt/target /usr/bin/systemctl disable wpa_supplicant.service
-chroot /mnt/target /usr/bin/systemctl disable firewalld.service
-chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
 chroot /mnt/target /usr/bin/systemctl enable systemd-networkd.service
-chroot /mnt/target /usr/bin/systemctl disable systemd-networkd.socket
+chroot /mnt/target /usr/bin/systemctl enable chronyd.service
+chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
+chroot /mnt/target /usr/bin/systemctl disable fedora-readonly.service
+chroot /mnt/target /usr/bin/systemctl disable sssd-secrets.socket
+chroot /mnt/target /usr/bin/systemctl disable sssd.service
 
-# Configure root password
+# Set root password
 echo ""
 echo "Set a root password."
 echo ""

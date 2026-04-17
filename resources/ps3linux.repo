@@ -1,5 +1,5 @@
 [ps3linux]
-name=PS3LINUX 1 - ppc64
+name=ps3linux 1 - ppc64
 failovermethod=priority
 baseurl=https://ps3linux.net/ps3linux-repos/1/ppc64/
 enabled=1
