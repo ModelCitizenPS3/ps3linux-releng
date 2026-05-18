@@ -199,10 +199,12 @@ EOF
 chroot /mnt/target /usr/bin/systemctl set-default multi-user.target
 chroot /mnt/target /usr/bin/systemctl enable systemd-networkd.service
 chroot /mnt/target /usr/bin/systemctl enable chronyd.service
-chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
+chroot /mnt/target /usr/bin/systemctl disable systemd-networkd.socket
+chroot /mnt/target /usr/bin/systemctl disable systemd-resolved.service
 chroot /mnt/target /usr/bin/systemctl disable fedora-readonly.service
 chroot /mnt/target /usr/bin/systemctl disable sssd-secrets.socket
 chroot /mnt/target /usr/bin/systemctl disable sssd.service
+chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
 
 # Set root password
 echo ""
