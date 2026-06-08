@@ -131,7 +131,7 @@ umount $KERNEL_BUILD_PATH/proc
 mkdir -p "$CHROOT_PATH"
 
 # Install root filesystem into chroot directory
-dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager,audit,firewalld install filesystem
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager,audit,firewalld,plymouth install filesystem
 
 # Delete empty file
 rm -f $CHROOT_PATH/dev/null
@@ -150,17 +150,17 @@ mount -t tmpfs tmpfs $CHROOT_PATH/tmp
 touch $CHROOT_PATH/etc/fstab
 
 # Install dnf package manager into chroot directory
-dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager,audit,firewalld install dnf
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager,audit,firewalld,plymouth install dnf
 
 # Configure package repos and enable network for chroot
 sed -i 's/enabled=1/enabled=0/g' $CHROOT_PATH/etc/yum.repos.d/fedora-updates.repo
 echo "nameserver 8.8.8.8" > $CHROOT_PATH/etc/resolv.conf
 
 # Install "core" dnf package group inside chroot directory
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld groupinstall core
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld,plymouth groupinstall core
 
 # Install additional packages we want to have available in our live image
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld install udisks2-zram bash-completion wget wpa_supplicant nano lynx chrony
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld,plymouth install udisks2-zram bash-completion wget wpa_supplicant nano lynx chrony
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 
 # Additional configurations for the live session
@@ -221,7 +221,6 @@ chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-readonly.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable mdmonitor.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable multipathd.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable sssd-secrets.socket
-chroot $CHROOT_PATH /usr/bin/systemctl disable sssd.service
 
 # Unmount virtual filesystems from our ppc64 chroot
 umount $CHROOT_PATH/tmp
@@ -238,6 +237,7 @@ rm -rf $CHROOT_PATH/lib/firmware/*
 find $CHROOT_PATH -type f \( -perm -111 -o -name '*.so*' -o -name '*.ko' \) -exec file {} \; | grep 'ELF' | cut -d: -f1 | while read f; do echo "Stripping $f"; powerpc64-linux-gnu-strip --strip-unneeded "$f" || true; done
 find $CHROOT_PATH/usr/lib64 -name '*.a' -delete
 
+# Build an initramfs image to handle mounting squashfs root and setup overlayfs
 mkdir -p $INITRAMFS_PATH/{dev,iso,lower,mnt,proc,run,sys,sysroot/{dev,proc,run,sys,tmp},tmp,usr/{bin,lib,lib64,sbin},upper/{upper,work}}
 pushd $INITRAMFS_PATH
 ln -s usr/bin bin
@@ -245,11 +245,17 @@ ln -s usr/lib lib
 ln -s usr/lib64 lib64
 ln -s usr/sbin sbin
 popd
-mkdir -p $INITRAMFS_PATH/lib/modules
 mknod -m 600 $INITRAMFS_PATH/dev/console c 5 1
 mknod -m 666 $INITRAMFS_PATH/dev/null c 1 3
+
+# Copy kernel module(s) from our kernel build (above)
+mkdir -p $INITRAMFS_PATH/lib/modules
 cp -rf $KERNEL_BUILD_PATH/lib/modules/$KERNEL_VERSION $INITRAMFS_PATH/lib/modules/
+
+# Copy in our custom minimal init script
 cp -f $RESOURCES_PATH/init $INITRAMFS_PATH/init
+
+# Copy some bins and their dependent libs from our previously built ppc64 chroot directory
 cp $CHROOT_PATH/usr/bin/mount $INITRAMFS_PATH/usr/bin/mount
 cp $CHROOT_PATH/usr/bin/sleep $INITRAMFS_PATH/usr/bin/sleep
 cp $CHROOT_PATH/usr/bin/echo $INITRAMFS_PATH/usr/bin/echo
@@ -270,6 +276,8 @@ cp $CHROOT_PATH/lib64/libtinfo.so.6.1 $INITRAMFS_PATH/lib64/libtinfo.so.6.1
 pushd $INITRAMFS_PATH/usr/bin
 ln -s bash sh
 popd
+
+# Create necessary library symlinks
 pushd $INITRAMFS_PATH/lib64
 ln -s libmount.so.1.1.0 libmount.so.1
 ln -s libblkid.so.1.1.0 libblkid.so.1
@@ -284,12 +292,19 @@ ln -s libtinfo.so.6.1 libtinfo.so.6
 ln -s ld-2.27.so ld-linux-x86-64.so.2
 popd
 
+# Create directory that will become our finished live ISO
 mkdir -p $LIVE_ISO_PATH/{boot,etc,LiveOS}
+
+# Compress initramfs and output to final live ISO directory
 pushd $INITRAMFS_PATH
 find . | cpio -H newc -o | gzip > $LIVE_ISO_PATH/boot/initramfs.img
 popd
+
+# Copy kernel and yaboot.conf files to final live ISO directories
 cp -f $KERNEL_BUILD_PATH/linux-$KERNEL_VERSION/arch/powerpc/boot/zImage $LIVE_ISO_PATH/boot/vmlinuz
 cp -f $RESOURCES_PATH/yaboot.conf $LIVE_ISO_PATH/etc/yaboot.conf
+
+# Master ISO file from our live ISO directory
 mksquashfs $CHROOT_PATH $LIVE_ISO_PATH/LiveOS/liveroot.img -comp xz -b 1M -Xdict-size 100% -noappend
 mkisofs -r -J -V PS3LIVE -o PS3LINUX_Live_ISO.iso $LIVE_ISO_PATH
 
@@ -303,7 +318,7 @@ else
     rm -rf $KERNEL_BUILD_PATH $CHROOT_PATH $INITRAMFS_PATH $LIVE_ISO_PATH
 fi
 
-echo "Done. Live ISO image is PS3LINUX_Live_ISO.iso. Live ISO root password is HACKTHEPLANET. Happy hacking!"
+echo "Done. Live ISO image is PS3LINUX_Live_ISO.iso. Live ISO root password is HACKTHEPLANET."
 echo ""
 
 exit 0
