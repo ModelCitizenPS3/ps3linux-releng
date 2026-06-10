@@ -17,6 +17,7 @@ CHROOT_PATH="$(pwd)/PS3LINUX_ppc64_chroot"
 LIVE_ISO_PATH="$(pwd)/PS3LINUX_Live_ISO"
 INITRAMFS_PATH="$(pwd)/initramfs"
 RESOURCES_PATH="$(pwd)/resources"
+EXCLUDES="NetworkManager,audit,firewalld,plymouth"
 
 # Usage message
 usage() {
@@ -131,7 +132,7 @@ umount $KERNEL_BUILD_PATH/proc
 mkdir -p "$CHROOT_PATH"
 
 # Install root filesystem into chroot directory
-dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager,audit,firewalld,plymouth install filesystem
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=$EXCLUDES install filesystem
 
 # Delete empty file
 rm -f $CHROOT_PATH/dev/null
@@ -150,17 +151,17 @@ mount -t tmpfs tmpfs $CHROOT_PATH/tmp
 touch $CHROOT_PATH/etc/fstab
 
 # Install dnf package manager into chroot directory
-dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=NetworkManager,audit,firewalld,plymouth install dnf
+dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=$EXCLUDES install dnf
 
 # Configure package repos and enable network for chroot
 sed -i 's/enabled=1/enabled=0/g' $CHROOT_PATH/etc/yum.repos.d/fedora-updates.repo
 echo "nameserver 8.8.8.8" > $CHROOT_PATH/etc/resolv.conf
 
 # Install "core" dnf package group inside chroot directory
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld,plymouth groupinstall core
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=$EXCLUDES groupinstall core
 
 # Install additional packages we want to have available in our live image
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=NetworkManager,audit,firewalld,plymouth install udisks2-zram bash-completion wget wpa_supplicant nano lynx chrony
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=$EXCLUDES install udisks2-zram bash-completion wget wpa_supplicant nano lynx chrony
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 
 # Additional configurations for the live session
@@ -220,7 +221,6 @@ chroot $CHROOT_PATH /usr/bin/systemctl disable dnf-makecache.timer
 chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-readonly.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable mdmonitor.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable multipathd.service
-chroot $CHROOT_PATH /usr/bin/systemctl disable sssd-secrets.socket
 
 # Unmount virtual filesystems from our ppc64 chroot
 umount $CHROOT_PATH/tmp

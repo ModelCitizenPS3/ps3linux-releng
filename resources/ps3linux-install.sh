@@ -7,6 +7,7 @@ BOOT_DEV=""
 ROOT_PART=""
 SWAP_PART=""
 HOST_NAME="localhost"
+EXCLUDES="fedora-release,generic-release,plymouth"
 
 # Check if we have root privileges
 if [ $(id -u) -ne 0 ]; then
@@ -124,7 +125,7 @@ echo "Building dnf metadata cache. This can take several minutes..."
 echo ""
 
 # Install root file system
-dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=updates-testing --enablerepo=ps3linux --installroot=/mnt/target --exclude=fedora-release,generic-release install filesystem ps3linux-release
+dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=updates-testing --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install filesystem ps3linux-release
 
 # Mount virtual file systems
 rm -f /mnt/target/dev/null
@@ -147,7 +148,7 @@ echo "nameserver 8.8.8.8" > /mnt/target/etc/resolv.conf
 echo "nameserver 8.8.4.4" >> /mnt/target/etc/resolv.conf
 
 # Install core package group
-dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=updates-testing --enablerepo=ps3linux --installroot=/mnt/target groupinstall core
+dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=updates-testing --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES groupinstall core
 
 # Prepare bootloader config file
 cat > /mnt/target/etc/yaboot.conf << EOF
@@ -156,11 +157,14 @@ partition=$ROOT_PART
 EOF
 
 # Install kernel and additional packages and clear dnf cache
-dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=updates-testing --enablerepo=ps3linux --installroot=/mnt/target install kernel kernel-core kernel-modules kernel-headers chrony bash-completion nfs-utils wpa_supplicant dosfstools vim nano
+dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=updates-testing --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install kernel kernel-core kernel-modules kernel-headers chrony bash-completion nfs-utils wpa_supplicant dosfstools vim nano
 dnf --installroot=/mnt/target clean all
 
 # Complete bootloader config file yaboot.conf
 sed -i "s|append=\"\"|append=\"video=ps3fb:mode:1669 root=/dev/ps3dd$ROOT_PART selinux=0 audit=0\"|" /mnt/target/etc/yaboot.conf
+
+# Configure dnf excludes
+echo "exclude=$EXCLUDES" >> /mnt/target/etc/dnf/dnf.conf
 
 # Set hostname
 echo "$HOST_NAME" > /mnt/target/etc/hostname
@@ -203,8 +207,6 @@ chroot /mnt/target /usr/bin/systemctl enable chronyd.service
 chroot /mnt/target /usr/bin/systemctl disable systemd-networkd.socket
 chroot /mnt/target /usr/bin/systemctl disable systemd-resolved.service
 chroot /mnt/target /usr/bin/systemctl disable fedora-readonly.service
-chroot /mnt/target /usr/bin/systemctl disable sssd-secrets.socket
-chroot /mnt/target /usr/bin/systemctl disable sssd.service
 chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
 
 # Set root password
