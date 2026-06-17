@@ -11,13 +11,13 @@ fi
 # Variables
 KEEP=0
 JOBS=1
-KERNEL_VERSION="6.1.159"
+KERNEL_VERSION="6.6.142"
 KERNEL_BUILD_PATH="$(pwd)/PS3LINUX_x86_64_chroot"
 CHROOT_PATH="$(pwd)/PS3LINUX_ppc64_chroot"
 LIVE_ISO_PATH="$(pwd)/PS3LINUX_Live_ISO"
 INITRAMFS_PATH="$(pwd)/initramfs"
 RESOURCES_PATH="$(pwd)/resources"
-EXCLUDES="NetworkManager,audit,firewalld,plymouth"
+EXCLUDES="NetworkManager,audit,firewalld,plymouth,quotu,grub2,sssd"
 
 # Usage message
 usage() {
@@ -96,18 +96,17 @@ mount -o bind /dev/pts $KERNEL_BUILD_PATH/dev/pts
 mount -t tmpfs tmpfs $KERNEL_BUILD_PATH/run
 mount -t tmpfs tmpfs $KERNEL_BUILD_PATH/tmp
 
-# Some packages look for this file
+# Some packages look for this file on installation
 touch $KERNEL_BUILD_PATH/etc/fstab
 
 # Install dnf package manager into chroot directory
 dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install dnf
 
-# Configure package repos and configure network for chroot
-rm -f $KERNEL_BUILD_PATH/etc/yum.repos.d/fedora-*
+# Configure configure network for chroot
 echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
 
-# Install kernel build dependencies inside chroot directory
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 install perl-interpreter binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel gcc-powerpc64-linux-gnu binutils-powerpc64-linux-gnu xz findutils kmod
+# Install kernel build dependencies 
+chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 --disablerepo=* --enablerepo=fedora install perl-interpreter binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel gcc-powerpc64-linux-gnu binutils-powerpc64-linux-gnu xz findutils kmod
 
 # Cross compile kernel inside our x86_64 chroot
 chroot $KERNEL_BUILD_PATH /usr/bin/wget -4 https://www.kernel.org/pub/linux/kernel/v6.x/linux-$KERNEL_VERSION.tar.xz
@@ -153,20 +152,19 @@ touch $CHROOT_PATH/etc/fstab
 # Install dnf package manager into chroot directory
 dnf -y --use-host-config --releasever=28 --forcearch=ppc64 --disable-repo=* --enable-repo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --installroot=$CHROOT_PATH --exclude=$EXCLUDES install dnf
 
-# Configure package repos and enable network for chroot
-sed -i 's/enabled=1/enabled=0/g' $CHROOT_PATH/etc/yum.repos.d/fedora-updates.repo
+# Enable networking for chroot
 echo "nameserver 8.8.8.8" > $CHROOT_PATH/etc/resolv.conf
+echo "nameserver 8.8.4.4" >> $CHROOT_PATH/etc/resolv.conf
 
 # Install "core" dnf package group inside chroot directory
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=$EXCLUDES groupinstall core
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=$EXCLUDES groupinstall core
 
 # Install additional packages we want to have available in our live image
-chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=$EXCLUDES install udisks2-zram bash-completion wget wpa_supplicant nano lynx chrony
+chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --setopt=install_weak_deps=False --setopt=tsflags=nodocs --exclude=$EXCLUDES install udisks2-zram bash-completion wget wpa_supplicant nano lynx chrony rsyslog smartmontools
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 
 # Additional configurations for the live session
 echo "ps3linux" > $CHROOT_PATH/etc/hostname
-rm -f $CHROOT_PATH/etc/nsswitch.conf.rpmnew
 cp -f $RESOURCES_PATH/motd $CHROOT_PATH/etc/motd
 cat >> $CHROOT_PATH/root/.bashrc << EOF
 
@@ -204,6 +202,10 @@ EOF
 cp -f $RESOURCES_PATH/RPM-GPG-KEY-ps3linux-1-primary $CHROOT_PATH/etc/pki/rpm-gpg/RPM-GPG-KEY-ps3linux-1-primary
 cp -f $RESOURCES_PATH/ps3linux.repo $CHROOT_PATH/etc/yum.repos.d/ps3linux.repo
 
+# Resources needed by my ps3linux-install.sh script
+mkdir -p $CHROOT_PATH/resources
+cp -f $RESOURCES_PATH/xorg.conf $CHROOT_PATH/resources/xorg.conf
+
 # Configure autologin
 mkdir -p $CHROOT_PATH/etc/systemd/system/getty@tty1.service.d
 cat > $CHROOT_PATH/etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
@@ -219,6 +221,7 @@ chroot $CHROOT_PATH /usr/bin/systemctl enable zram-swap.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable systemd-networkd.socket
 chroot $CHROOT_PATH /usr/bin/systemctl disable dnf-makecache.timer
 chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-readonly.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-import-state.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable mdmonitor.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable multipathd.service
 

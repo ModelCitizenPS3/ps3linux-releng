@@ -7,7 +7,9 @@ BOOT_DEV=""
 ROOT_PART=""
 SWAP_PART=""
 HOST_NAME="localhost"
-EXCLUDES="fedora-release,generic-release,plymouth"
+INSTALL_DEV="0"
+INSTALL_GUI="0"
+EXCLUDES="fedora-release,generic-release,plymouth,firewalld,ppc64-utils,lorax,audit,firefox,grub2,sssd"
 
 # Check if we have root privileges
 if [ $(id -u) -ne 0 ]; then
@@ -23,14 +25,19 @@ Usage: $0 <OPTIONS>
 
 OPTIONS:
   --boot <DEVICE>           PS3's hard disk device (HDD) name (as seen by petitboot)
-                            use /dev/ps3da if PS3 is downgraded (on Firmware <= 3.15)
-                            use /dev/ps3dd if PS3 is on CFW like Rebug or Evilnat
+                            use /dev/ps3da if your PS3 is downgraded (on Firmware <= 3.15)
+                            use /dev/ps3dd if your PS3 is on CFW like Rebug or Evilnat
 
   --root <PARTITION>        partition number where PS3 LINUX will be installed
 
   --swap <PARTITION>        partition number to be used as as swap
 
   --hostname <HOSTNAME>     hostname for your PS3LINUX installation
+
+  --dev                     install common development and software packaging tools
+                            includes my updated CELL SDK (ppu-gcc, spu-gcc, etc.)
+
+  --gui                     install a gui desktop (Xfce)
 
   --help                    show this help
 
@@ -65,6 +72,14 @@ while [[ $# -gt 0 ]]; do
         --hostname)
             HOST_NAME="$2"
             shift 2
+            ;;
+        --dev)
+            INSTALL_DEV="1"
+            shift 1
+            ;;
+        --gui)
+            INSTALL_GUI="1"
+            shift 1
             ;;
         --help|-h)
             usage
@@ -113,19 +128,20 @@ if [ ! -z $SWAP_PART ]; then
 fi
 
 echo ""
-echo "Ready to format root device /dev/ps3dd$ROOT_PART - Enter y to continue."
+echo "Root device /dev/ps3dd$ROOT_PART will now be formatted. Enter y to continue..."
 echo ""
 
-# Format and mount target root partition
+# Format and mount target root partition and 
+# disable time-based fsck checks (for PS3s with dead CMOS batteries)
 mkfs -t ext4 /dev/ps3dd$ROOT_PART
+tune2fs -i 0 /dev/ps3dd$ROOT_PART
 mount -t ext4 /dev/ps3dd$ROOT_PART /mnt/target
-rm -rf /mnt/target/*
 
 echo "Building dnf metadata cache. This can take several minutes..."
 echo ""
 
 # Install root file system
-dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=updates-testing --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install filesystem ps3linux-release
+dnf -y --releasever=28 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install filesystem ps3linux-release
 
 # Mount virtual file systems
 rm -f /mnt/target/dev/null
@@ -148,7 +164,7 @@ echo "nameserver 8.8.8.8" > /mnt/target/etc/resolv.conf
 echo "nameserver 8.8.4.4" >> /mnt/target/etc/resolv.conf
 
 # Install core package group
-dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=updates-testing --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES groupinstall core
+dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES groupinstall core
 
 # Prepare bootloader config file
 cat > /mnt/target/etc/yaboot.conf << EOF
@@ -156,15 +172,14 @@ boot=$BOOT_DEV
 partition=$ROOT_PART
 EOF
 
+# Configure dnf excludes
+echo "exclude=$EXCLUDES" >> /mnt/target/etc/dnf/dnf.conf
+
 # Install kernel and additional packages and clear dnf cache
-dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=updates-testing --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install kernel kernel-core kernel-modules kernel-headers chrony bash-completion nfs-utils wpa_supplicant dosfstools vim nano
-dnf --installroot=/mnt/target clean all
+dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install kernel kernel-core kernel-modules kernel-headers chrony bash-completion nfs-utils wpa_supplicant rsyslog dosfstools vim nano tree dnf-utils gnupg pv rsync htop tmux wget
 
 # Complete bootloader config file yaboot.conf
 sed -i "s|append=\"\"|append=\"video=ps3fb:mode:1669 root=/dev/ps3dd$ROOT_PART selinux=0 audit=0\"|" /mnt/target/etc/yaboot.conf
-
-# Configure dnf excludes
-echo "exclude=$EXCLUDES" >> /mnt/target/etc/dnf/dnf.conf
 
 # Set hostname
 echo "$HOST_NAME" > /mnt/target/etc/hostname
@@ -191,7 +206,7 @@ echo 'KERNEL=="ps3vram", ACTION=="add", RUN+="/sbin/mkswap /dev/ps3vram", RUN+="
 # Set swappiness
 echo "vm.swappiness = 10" >> /mnt/target/etc/sysctl.conf
 
-# Configure eth0 and wlan0 for systemd networking
+# Configure eth0 for systemd networking
 cat > /mnt/target/etc/systemd/network/10-eth0.network << EOF
 [Match]
 Name=eth0
@@ -200,6 +215,21 @@ Name=eth0
 DHCP=yes
 EOF
 
+if [ $INSTALL_DEV == "1" ]; then
+    dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES groupinstall "C Development Tools and Libraries" "Development Tools" "Development Libraries" "RPM Development Tools"
+    dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install gmp gmp-c++ gmp-static gmp-devel mpfr mpfr-devel libmpc libmpc-devel isl isl-devel cloog cloog-devel ppl ppl-devel gcc gcc-c++ gcc-gfortran gcc-gnat gcc-plugin-devel ppu-binutils spu-binutils bc flex gawk bison ncurses ncurses-devel openssl openssl-static openssl-devel zlib zlib-static zlib-devel libstdc++ libstdc++-static libstdc++-devel rpmlint rpm-sign yasm nasm cmake xmlto help2man asciidoc texinfo info gettext check expect tcl dejagnu python2-devel python3-devel perl
+fi
+
+if [ $INSTALL_GUI == "1" ]; then
+    dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES groupinstall base-x Xfce
+    dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install hexchat ghex
+    cp -f /resources/xorg.conf /mnt/target/etc/X11/xorg.conf
+    echo "autospawn = yes" >> /mnt/target/etc/pulse/client.conf
+fi
+
+# Remove dnf caches
+dnf --installroot=/mnt/target clean all
+
 # Set initial systemd services
 chroot /mnt/target /usr/bin/systemctl set-default multi-user.target
 chroot /mnt/target /usr/bin/systemctl enable systemd-networkd.service
@@ -207,7 +237,15 @@ chroot /mnt/target /usr/bin/systemctl enable chronyd.service
 chroot /mnt/target /usr/bin/systemctl disable systemd-networkd.socket
 chroot /mnt/target /usr/bin/systemctl disable systemd-resolved.service
 chroot /mnt/target /usr/bin/systemctl disable fedora-readonly.service
+chroot /mnt/target /usr/bin/systemctl disable fedora-import-state.service
 chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
+chroot /mnt/target /usr/bin/systemctl disable cups.socket
+chroot /mnt/target /usr/bin/systemctl disable cups.path
+chroot /mnt/target /usr/bin/systemctl disable cups.service
+chroot /mnt/target /usr/bin/systemctl disable dm-event.socket
+chroot /mnt/target /usr/bin/systemctl disable lvm2-lvmetad.socket
+chroot /mnt/target /usr/bin/systemctl disable lvm2-lvmpolld.socket
+chroot /mnt/target /usr/bin/systemctl disable lvm2-monitor.service
 
 # Set root password
 echo ""
@@ -229,6 +267,10 @@ swapoff /dev/ps3dd$SWAP_PART
 
 echo ""
 echo "PS3LINUX install complete."
+if [ $INSTALL_GUI == "1" ]; then
+    echo "Run startxfce4 from the PS3LINUX command line to enter your Xfce GUI desktop environment."
+    echo ""
+fi
 echo "You may reboot your Playstation 3."
 echo ""
 
