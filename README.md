@@ -6,11 +6,12 @@ If you are interested in developing for PS3LINUX but do not have a dedicated Lin
 
 ### Dependencies
 
-1. a Fedora operating system - my scripts are heavily dependent on the dnf package manager
-2. qemu - for running programs executed within the ppc64 chroot: `sudo dnf install qemu`
-3. enable systemd's proc-sys-fs-binfmt_misc.mount unit: `sudo systemctl enable proc-sys-fs-binfmt_misc.mount`
-4. optional - add your user to the kvm group: `sudo usermod -aG kvm <USERNAME>`
-5. iso mastering utils (mksquashfs, mkisofs, etc): `sudo dnf install squashfs-tools genisoimage xorriso`
+1. the dnf package manager (the default package manager on Fedora/RHEL based Linux distrobutions)
+2. qemu - for running programs executed within the ppc64 chroot: `sudo dnf install qemu qemu-user-static-ppc`
+3. powerpc64-linux-gnu-strip - for stripping ppc64 binaries: `sudo dnf install binutils-powerpc64-linux-gnu`
+4. enable systemd's proc-sys-fs-binfmt_misc.mount unit: `sudo systemctl enable proc-sys-fs-binfmt_misc.mount`
+5. optional - add your user to the kvm group: `sudo usermod -aG kvm <USERNAME>`
+6. iso mastering utils (mksquashfs, mkisofs, etc): `sudo dnf install squashfs-tools genisoimage xorriso`
 
 ### How to use
 

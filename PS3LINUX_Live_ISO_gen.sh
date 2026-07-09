@@ -11,13 +11,13 @@ fi
 # Variables
 KEEP=0
 JOBS=1
-KERNEL_VERSION="6.6.142"
+KERNEL_VERSION="6.6.144"
 KERNEL_BUILD_PATH="$(pwd)/PS3LINUX_x86_64_chroot"
 CHROOT_PATH="$(pwd)/PS3LINUX_ppc64_chroot"
 LIVE_ISO_PATH="$(pwd)/PS3LINUX_Live_ISO"
 INITRAMFS_PATH="$(pwd)/initramfs"
 RESOURCES_PATH="$(pwd)/resources"
-EXCLUDES="NetworkManager,audit,firewalld,plymouth,quotu,grub2,sssd"
+EXCLUDES="NetworkManager,audit,firewalld,plymouth,sssd"
 
 # Usage message
 usage() {
@@ -109,7 +109,7 @@ echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
 chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 --disablerepo=* --enablerepo=fedora install perl-interpreter binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel gcc-powerpc64-linux-gnu binutils-powerpc64-linux-gnu xz findutils kmod
 
 # Cross compile kernel inside our x86_64 chroot
-chroot $KERNEL_BUILD_PATH /usr/bin/wget -4 https://www.kernel.org/pub/linux/kernel/v6.x/linux-$KERNEL_VERSION.tar.xz
+chroot $KERNEL_BUILD_PATH /usr/bin/wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-$KERNEL_VERSION.tar.xz
 chroot $KERNEL_BUILD_PATH /usr/bin/tar -xf linux-$KERNEL_VERSION.tar.xz
 cp -f $RESOURCES_PATH/0011-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
 cp -f $RESOURCES_PATH/config-$KERNEL_VERSION-live $KERNEL_BUILD_PATH/linux-$KERNEL_VERSION/.config
@@ -164,7 +164,7 @@ chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --disabler
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 
 # Additional configurations for the live session
-echo "ps3linux" > $CHROOT_PATH/etc/hostname
+echo "ps3live" > $CHROOT_PATH/etc/hostname
 cp -f $RESOURCES_PATH/motd $CHROOT_PATH/etc/motd
 cat >> $CHROOT_PATH/root/.bashrc << EOF
 

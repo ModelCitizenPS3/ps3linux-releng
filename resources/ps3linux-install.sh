@@ -9,7 +9,7 @@ SWAP_PART=""
 HOST_NAME="localhost"
 INSTALL_DEV="0"
 INSTALL_GUI="0"
-EXCLUDES="fedora-release,generic-release,plymouth,firewalld,ppc64-utils,lorax,audit,firefox,grub2,sssd"
+EXCLUDES="fedora-release,generic-release,plymouth,firewalld,ppc64-utils,audit,firefox,sssd"
 
 # Check if we have root privileges
 if [ $(id -u) -ne 0 ]; then
@@ -223,29 +223,24 @@ fi
 if [ $INSTALL_GUI == "1" ]; then
     dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES groupinstall base-x Xfce
     dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install hexchat ghex
-    cp -f /resources/xorg.conf /mnt/target/etc/X11/xorg.conf
     echo "autospawn = yes" >> /mnt/target/etc/pulse/client.conf
 fi
 
 # Remove dnf caches
 dnf --installroot=/mnt/target clean all
 
+cp -f /resources/xorg.conf /mnt/target/etc/X11/xorg.conf
+
 # Set initial systemd services
 chroot /mnt/target /usr/bin/systemctl set-default multi-user.target
 chroot /mnt/target /usr/bin/systemctl enable systemd-networkd.service
 chroot /mnt/target /usr/bin/systemctl enable chronyd.service
+chroot /mnt/target /usr/bin/systemctl enable sshd.service
 chroot /mnt/target /usr/bin/systemctl disable systemd-networkd.socket
 chroot /mnt/target /usr/bin/systemctl disable systemd-resolved.service
 chroot /mnt/target /usr/bin/systemctl disable fedora-readonly.service
 chroot /mnt/target /usr/bin/systemctl disable fedora-import-state.service
 chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
-chroot /mnt/target /usr/bin/systemctl disable cups.socket
-chroot /mnt/target /usr/bin/systemctl disable cups.path
-chroot /mnt/target /usr/bin/systemctl disable cups.service
-chroot /mnt/target /usr/bin/systemctl disable dm-event.socket
-chroot /mnt/target /usr/bin/systemctl disable lvm2-lvmetad.socket
-chroot /mnt/target /usr/bin/systemctl disable lvm2-lvmpolld.socket
-chroot /mnt/target /usr/bin/systemctl disable lvm2-monitor.service
 
 # Set root password
 echo ""
