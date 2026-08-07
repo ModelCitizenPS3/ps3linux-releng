@@ -215,9 +215,6 @@ Name=eth0
 DHCP=yes
 EOF
 
-# Set local time to UTC
-ln -s ../usr/share/zoneinfo/UTC /mnt/target/etc/localtime
-
 if [ $INSTALL_DEV == "1" ]; then
     dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES groupinstall "C Development Tools and Libraries" "Development Tools" "Development Libraries" "RPM Development Tools"
     dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install gmp gmp-c++ gmp-static gmp-devel mpfr mpfr-devel libmpc libmpc-devel isl isl-devel cloog cloog-devel ppl ppl-devel gcc gcc-c++ gcc-gfortran gcc-gnat gcc-plugin-devel ppu-binutils spu-binutils bc flex gawk bison ncurses ncurses-devel openssl openssl-static openssl-devel zlib zlib-static zlib-devel libstdc++ libstdc++-static libstdc++-devel rpmlint rpm-sign yasm nasm cmake xmlto help2man asciidoc texinfo info gettext check expect tcl dejagnu python2-devel python3-devel perl
