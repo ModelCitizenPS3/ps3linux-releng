@@ -164,6 +164,7 @@ chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --disabler
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 
 # Additional configurations for the live session
+cp -f $RESOURCES_PATH/RPM-GPG-KEY-fedora-primary $CHROOT_PATH/etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-primary
 echo "ps3live" > $CHROOT_PATH/etc/hostname
 cp -f $RESOURCES_PATH/motd $CHROOT_PATH/etc/motd
 cat >> $CHROOT_PATH/root/.bashrc << EOF
@@ -224,6 +225,8 @@ chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-readonly.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable fedora-import-state.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable mdmonitor.service
 chroot $CHROOT_PATH /usr/bin/systemctl disable multipathd.service
+chroot $CHROOT_PATH /usr/bin/systemctl disable sssd-secrets.socket
+chroot $CHROOT_PATH /usr/bin/systemctl disable sssd.service
 
 # Unmount virtual filesystems from our ppc64 chroot
 umount $CHROOT_PATH/tmp
