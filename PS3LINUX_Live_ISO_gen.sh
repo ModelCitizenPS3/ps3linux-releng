@@ -164,9 +164,11 @@ chroot $CHROOT_PATH /usr/bin/dnf -y --releasever=28 --forcearch=ppc64 --disabler
 chroot $CHROOT_PATH /usr/bin/dnf clean all
 
 # Additional configurations for the live session
+sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' $CHROOT_PATH/etc/selinux/config
 cp -f $RESOURCES_PATH/RPM-GPG-KEY-fedora-primary $CHROOT_PATH/etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-primary
-echo "ps3live" > $CHROOT_PATH/etc/hostname
+cp -f $RESOURCES_PATH/RPM-GPG-KEY-ps3linux-1-primary $CHROOT_PATH/etc/pki/rpm-gpg/RPM-GPG-KEY-ps3linux-1-primary
 cp -f $RESOURCES_PATH/motd $CHROOT_PATH/etc/motd
+echo "ps3live" > $CHROOT_PATH/etc/hostname
 cat >> $CHROOT_PATH/root/.bashrc << EOF
 
 alias ll='ls -lh --color=auto'
@@ -200,7 +202,6 @@ cat >> $CHROOT_PATH/etc/motd << EOF
 Run "ps3linux-install.sh --help" for install script info.
 
 EOF
-cp -f $RESOURCES_PATH/RPM-GPG-KEY-ps3linux-1-primary $CHROOT_PATH/etc/pki/rpm-gpg/RPM-GPG-KEY-ps3linux-1-primary
 cp -f $RESOURCES_PATH/ps3linux.repo $CHROOT_PATH/etc/yum.repos.d/ps3linux.repo
 
 # Resources needed by my ps3linux-install.sh script
