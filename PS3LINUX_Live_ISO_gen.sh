@@ -11,7 +11,7 @@ fi
 # Variables
 KEEP=0
 JOBS=1
-KERNEL_VERSION="6.6.151"
+KERNEL_VERSION="6.18.52"
 KERNEL_BUILD_PATH="$(pwd)/PS3LINUX_x86_64_chroot"
 CHROOT_PATH="$(pwd)/PS3LINUX_ppc64_chroot"
 LIVE_ISO_PATH="$(pwd)/PS3LINUX_Live_ISO"
@@ -81,7 +81,7 @@ fi
 mkdir -p "$KERNEL_BUILD_PATH"
 
 # Install root filesystem into chroot directory
-dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install filesystem
+dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --enable-repo=updates --installroot=$KERNEL_BUILD_PATH install filesystem
 
 # Delete empty file
 rm -f $KERNEL_BUILD_PATH/dev/null
@@ -100,20 +100,22 @@ mount -t tmpfs tmpfs $KERNEL_BUILD_PATH/tmp
 touch $KERNEL_BUILD_PATH/etc/fstab
 
 # Install dnf package manager into chroot directory
-dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --installroot=$KERNEL_BUILD_PATH install dnf
+dnf -y --use-host-config --releasever=28 --forcearch=x86_64 --disable-repo=* --enable-repo=fedora --enable-repo=updates --installroot=$KERNEL_BUILD_PATH install dnf
 
 # Configure configure network for chroot
 echo "nameserver 8.8.8.8" > $KERNEL_BUILD_PATH/etc/resolv.conf
 
-# Install kernel build dependencies 
-chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 --disablerepo=* --enablerepo=fedora install perl-interpreter binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel gcc-powerpc64-linux-gnu binutils-powerpc64-linux-gnu xz findutils kmod
+# Install kernel building tools
+chroot $KERNEL_BUILD_PATH /usr/bin/dnf -y --releasever=28 --forcearch=x86_64 --disablerepo=* --enablerepo=fedora --enablerepo=updates install perl-interpreter binutils gcc gcc-c++ gcc-plugin-devel make gawk bc flex bison wget tar rsync patch openssl openssl-devel zlib zlib-devel gcc-powerpc64-linux-gnu binutils-powerpc64-linux-gnu xz findutils kmod
 
 # Cross compile kernel inside our x86_64 chroot
 chroot $KERNEL_BUILD_PATH /usr/bin/wget -4 https://www.kernel.org/pub/linux/kernel/v6.x/linux-$KERNEL_VERSION.tar.xz
 chroot $KERNEL_BUILD_PATH /usr/bin/tar -xf linux-$KERNEL_VERSION.tar.xz
-cp -f $RESOURCES_PATH/0011-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
-cp -f $RESOURCES_PATH/config-$KERNEL_VERSION-live $KERNEL_BUILD_PATH/linux-$KERNEL_VERSION/.config
-chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-$KERNEL_VERSION -p1 -i /0011-ps3stor-multiple-regions.patch
+cp -f $RESOURCES_PATH/0001-ps3stor-multiple-regions.patch $KERNEL_BUILD_PATH/
+cp -f $RESOURCES_PATH/0002-spufs-fix-deadlock-and-dir-lifetimes.patch $KERNEL_BUILD_PATH/
+chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-$KERNEL_VERSION -p1 -i /0001-ps3stor-multiple-regions.patch
+chroot $KERNEL_BUILD_PATH /usr/bin/patch -d /linux-$KERNEL_VERSION -p1 -i /0002-spufs-fix-deadlock-and-dir-lifetimes.patch
+cp -f $RESOURCES_PATH/config-live $KERNEL_BUILD_PATH/linux-$KERNEL_VERSION/.config
 chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KERNEL_VERSION olddefconfig
 chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KERNEL_VERSION -j$JOBS zImage modules
 chroot $KERNEL_BUILD_PATH /usr/bin/make ARCH=powerpc CROSS_COMPILE=powerpc64-linux-gnu- -C /linux-$KERNEL_VERSION modules_install
