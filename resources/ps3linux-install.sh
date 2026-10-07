@@ -176,7 +176,7 @@ EOF
 echo "exclude=$EXCLUDES" >> /mnt/target/etc/dnf/dnf.conf
 
 # Install kernel and additional packages and clear dnf cache
-dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install kernel kernel-core kernel-modules kernel-headers chrony bash-completion nfs-utils wpa_supplicant rsyslog dosfstools vim nano tree dnf-utils gnupg pv rsync htop tmux wget
+dnf -y --releasever=1 --forcearch=ppc64 --disablerepo=* --enablerepo=fedora --enablerepo=updates --enablerepo=ps3linux --installroot=/mnt/target --exclude=$EXCLUDES install kernel kernel-core kernel-modules kernel-headers chrony bash-completion nfs-utils wpa_supplicant rsyslog dosfstools vim nano tree dnf-utils gnupg pv rsync htop tmux wget wireless-regdb
 
 # Complete bootloader config file yaboot.conf
 sed -i "s|append=\"\"|append=\"video=ps3fb:mode:1669 root=/dev/ps3dd$ROOT_PART\"|" /mnt/target/etc/yaboot.conf
