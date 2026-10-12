@@ -233,16 +233,16 @@ cp -f /resources/xorg.conf /mnt/target/etc/X11/xorg.conf
 
 # Set initial systemd services
 chroot /mnt/target /usr/bin/systemctl set-default multi-user.target
-chroot /mnt/target /usr/bin/systemctl unmask systemd-timedated.service
-chroot /mnt/target /usr/bin/systemctl enable systemd-networkd.service
-chroot /mnt/target /usr/bin/systemctl enable chronyd.service
-chroot /mnt/target /usr/bin/systemctl enable sshd.service
-chroot /mnt/target /usr/bin/systemctl enable rsyslog.service
-chroot /mnt/target /usr/bin/systemctl disable systemd-networkd.socket
-chroot /mnt/target /usr/bin/systemctl disable systemd-resolved.service
-chroot /mnt/target /usr/bin/systemctl disable fedora-readonly.service
-chroot /mnt/target /usr/bin/systemctl disable fedora-import-state.service
-chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
+#chroot /mnt/target /usr/bin/systemctl unmask systemd-timedated.service
+#chroot /mnt/target /usr/bin/systemctl enable systemd-networkd.service
+#chroot /mnt/target /usr/bin/systemctl enable chronyd.service
+#chroot /mnt/target /usr/bin/systemctl enable sshd.service
+#chroot /mnt/target /usr/bin/systemctl enable rsyslog.service
+#chroot /mnt/target /usr/bin/systemctl disable systemd-networkd.socket
+#chroot /mnt/target /usr/bin/systemctl disable systemd-resolved.service
+#chroot /mnt/target /usr/bin/systemctl disable fedora-readonly.service
+#chroot /mnt/target /usr/bin/systemctl disable fedora-import-state.service
+#chroot /mnt/target /usr/bin/systemctl disable dnf-makecache.timer
 
 # Set root password
 echo ""
