@@ -229,7 +229,7 @@ fi
 # Remove dnf caches
 dnf --installroot=/mnt/target clean all
 
-cp -f /resources/xorg.conf /mnt/target/etc/X11/xorg.conf
+cp -f /etc/X11/xorg.conf /mnt/target/etc/X11/xorg.conf
 
 # Set initial systemd services
 chroot /mnt/target /usr/bin/systemctl set-default multi-user.target
